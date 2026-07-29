@@ -28,14 +28,24 @@ function build() {
 
     let html = fs.readFileSync(path.join(SRC_TEMPLATES, "index.html"), "utf-8");
 
-    // Replace Jinja2 url_for('static', filename='...') with /static/...
     html = html.replace(
         /\{\{\s*url_for\('static',\s*filename='([^']+)'\)\s*\}\}/g,
         (match, filename) => `/static/${filename}`
     );
 
+    html = html.replace(
+        '<script src="/static/app.js"></script>',
+        '<script src="/static/env-config.js"></script>\n    <script src="/static/app.js"></script>'
+    );
+
     fs.writeFileSync(path.join(DIST, "index.html"), html);
+
+    const apiBase = process.env.API_BASE || "";
+    const envConfig = `window.__API_BASE__ = "${apiBase}";\n`;
+    fs.writeFileSync(path.join(DIST, "static", "env-config.js"), envConfig);
+
     console.log("Frontend built successfully in dist/frontend/");
+    console.log("API_BASE:", apiBase || "(empty)");
 }
 
 build();
