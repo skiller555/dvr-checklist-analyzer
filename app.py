@@ -622,6 +622,10 @@ def generate_docx():
                     if img_data.startswith("data:"):
                         header_str, b64_str = img_data.split(",", 1)
                         img_bytes = base64.b64decode(b64_str)
+                    elif img_data.startswith("http://") or img_data.startswith("https://"):
+                        import urllib.request
+                        with urllib.request.urlopen(img_data, timeout=10) as resp:
+                            img_bytes = resp.read()
                     else:
                         img_bytes = base64.b64decode(img_data)
 
