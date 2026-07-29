@@ -1,0 +1,3 @@
+Total risks: 132
+Risks with images: 127
+Docx size: 101313 bytes

@@ -1,0 +1,38 @@
+Sheet Name: 'CHECK LIST', r_id: rId5, sheetId: 1
+Sheet Name: 'ORDINE', r_id: rId6, sheetId: 2
+Sheet Name: 'CLIENTI', r_id: rId7, sheetId: 3
+Sheet Name: 'STAMPA CHECK LIST', r_id: rId8, sheetId: 4
+Sheet Name: 'STAMPA CHECK LIST 2', r_id: rId9, sheetId: 5
+Sheet Name: 'TABELLA RISCHI', r_id: rId10, sheetId: 6
+Sheet Name: 'Copia di TABELLA RISCHI', r_id: rId11, sheetId: 7
+Sheet Name: ' TABELLA RISCHI AUTOMATICA', r_id: rId12, sheetId: 8
+Sheet Name: 'DVR - RISCHI', r_id: rId13, sheetId: 9
+Sheet Name: 'DUVRI-lettera', r_id: rId14, sheetId: 10
+Sheet Name: 'DUVRI-RISCHI MAGGIORI', r_id: rId15, sheetId: 11
+Sheet Name: 'VCS', r_id: rId16, sheetId: 12
+Sheet Name: 'Tabella VCS', r_id: rId17, sheetId: 13
+Sheet Name: 'Copia master Tabella VCS', r_id: rId18, sheetId: 14
+Sheet Name: 'Ditte esterne', r_id: rId19, sheetId: 15
+Sheet Name: 'ELENCHI', r_id: rId20, sheetId: 16
+Sheet Name: 'vcs origine', r_id: rId21, sheetId: 17
+Rel rId1 -> Sheet 'Unknown' -> Target file: theme/theme1.xml
+Rel rId2 -> Sheet 'Unknown' -> Target file: styles.xml
+Rel rId3 -> Sheet 'Unknown' -> Target file: sharedStrings.xml
+Rel rId4 -> Sheet 'Unknown' -> Target file: persons/person.xml
+Rel rId9 -> Sheet 'STAMPA CHECK LIST 2' -> Target file: worksheets/sheet5.xml
+Rel rId5 -> Sheet 'CHECK LIST' -> Target file: worksheets/sheet1.xml
+Rel rId6 -> Sheet 'ORDINE' -> Target file: worksheets/sheet2.xml
+Rel rId7 -> Sheet 'CLIENTI' -> Target file: worksheets/sheet3.xml
+Rel rId8 -> Sheet 'STAMPA CHECK LIST' -> Target file: worksheets/sheet4.xml
+Rel rId20 -> Sheet 'ELENCHI' -> Target file: worksheets/sheet16.xml
+Rel rId21 -> Sheet 'vcs origine' -> Target file: worksheets/sheet17.xml
+Rel rId11 -> Sheet 'Copia di TABELLA RISCHI' -> Target file: worksheets/sheet7.xml
+Rel rId10 -> Sheet 'TABELLA RISCHI' -> Target file: worksheets/sheet6.xml
+Rel rId13 -> Sheet 'DVR - RISCHI' -> Target file: worksheets/sheet9.xml
+Rel rId12 -> Sheet ' TABELLA RISCHI AUTOMATICA' -> Target file: worksheets/sheet8.xml
+Rel rId15 -> Sheet 'DUVRI-RISCHI MAGGIORI' -> Target file: worksheets/sheet11.xml
+Rel rId14 -> Sheet 'DUVRI-lettera' -> Target file: worksheets/sheet10.xml
+Rel rId17 -> Sheet 'Tabella VCS' -> Target file: worksheets/sheet13.xml
+Rel rId16 -> Sheet 'VCS' -> Target file: worksheets/sheet12.xml
+Rel rId19 -> Sheet 'Ditte esterne' -> Target file: worksheets/sheet15.xml
+Rel rId18 -> Sheet 'Copia master Tabella VCS' -> Target file: worksheets/sheet14.xml

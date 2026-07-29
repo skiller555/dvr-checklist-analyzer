@@ -1,0 +1,14 @@
+===================================================================
+   CONTEA & PARTNERS - GUIDA INSTALLAZIONE ED USO DVR CHECKLIST
+===================================================================
+
+ISTRUZIONI PER L'USO SU QUALSIASI COMPUTER WINDOWS:
+
+1. Estrai o copia l'intera cartella "DVR_Checklist_Analyzer" sul Desktop o su una pennetta USB di qualsiasi PC.
+2. Fai doppio clic sul file "AVVIA_DVR_ANALYZER.bat" (oppure su "DVR_Checklist_Analyzer.exe").
+3. Il server si avvierà ed il browser si aprirà automaticamente su http://127.0.0.1:5000!
+
+GESTIONE DEL DATABASE EXCEL:
+- L'applicazione rileva automaticamente il file "DATABASE.xlsx" se presente sul Desktop.
+- In alternativa utilizza il file "DATABASE.xlsx" interno alla cartella.
+- Tutte le nuove criticità aggiunte dall'app vengono salvate permanentemente in Excel.

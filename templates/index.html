@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DVR Checklist Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="noise-overlay"></div>
+
+    <div class="app-container">
+        <!-- Top Header Navigation -->
+        <header class="main-header">
+            <div class="logo">
+                <i class="fa-solid fa-clipboard-check icon-logo"></i>
+                <div class="logo-text">
+                    <h1>DVR Checklist</h1>
+                    <span>Analizzatore & Gestore Locale</span>
+                </div>
+            </div>
+            
+            <!-- Navigation Tabs -->
+            <nav class="nav-tabs">
+                <button class="nav-tab" id="tab-home" data-target="home-section">
+                    <i class="fa-solid fa-house"></i> Home
+                </button>
+                <button class="nav-tab active" data-target="upload-section">
+                    <i class="fa-solid fa-upload"></i> Carica PDF
+                </button>
+                <button class="nav-tab" data-target="interactive-checklist-section" id="tab-interactive">
+                    <i class="fa-solid fa-list-check"></i> Checklist Interattiva
+                    <span class="tab-badge" id="interactive-badge">0</span>
+                </button>
+                <button class="nav-tab" data-target="results-section" id="tab-results">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Criticità DVR
+                    <span class="tab-badge" id="results-badge">0</span>
+                </button>
+                <button class="nav-tab" data-target="database-browser-section" id="tab-database">
+                    <i class="fa-solid fa-database"></i> Consultazione Database
+                </button>
+            </nav>
+
+            <div class="header-status">
+                <div class="status-badge server-badge">
+                    <span class="status-dot green"></span>
+                    <span>Offline Mode</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- HOME: Scelta modalità -->
+            <section id="home-section" class="content-card tab-content">
+                <div class="card-header text-center">
+                    <h2>Benvenuto in DVR Checklist Analyzer</h2>
+                    <p>Scegli come vuoi procedere:</p>
+                </div>
+                <div class="home-options">
+                    <div class="home-card" data-action="import-pdf">
+                        <div class="home-icon"><i class="fa-solid fa-file-pdf"></i></div>
+                        <h3>Importa PDF checklist</h3>
+                        <p>Carica la checklist compilata, analizza con OCR e procedi alla verifica.</p>
+                    </div>
+                    <div class="home-card" data-action="compile-direct">
+                        <div class="home-icon"><i class="fa-solid fa-pen-to-square"></i></div>
+                        <h3>Compila checklist</h3>
+                        <p>Salta l'importazione PDF e compila direttamente la checklist interattiva.</p>
+                    </div>
+                    <div class="home-card" data-action="view-database">
+                        <div class="home-icon"><i class="fa-solid fa-database"></i></div>
+                        <h3>Visualizza Database criticità</h3>
+                        <p>Consulta, aggiungi o modifica le criticità già presenti nel database.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 1: PDF Checklist Upload Screen -->
+            <section id="upload-section" class="content-card tab-content">
+                <div class="card-header">
+                    <h2>Carica la Checklist Compilata</h2>
+                    <p>Trascina qui il file PDF della checklist compilata a penna o in digitale.<br>
+                    <small style="opacity:0.7;">L'analisi viene eseguita interamente in locale sul tuo PC.</small></p>
+                </div>
+
+                <div class="upload-dropzone" id="dropzone">
+                    <input type="file" id="file-input" accept="application/pdf" class="hidden-input">
+                    <div class="dropzone-content">
+                        <div class="icon-circle">
+                            <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        </div>
+                        <h3>Trascina il PDF qui</h3>
+                        <p>oppure <span>sfoglia i file</span></p>
+                        <span class="file-limits">Formato supportato: PDF (scansionato o digitale)</span>
+                    </div>
+                </div>
+
+                <!-- Selected File Display -->
+                <div id="file-details" class="file-details hidden">
+                    <div class="file-info">
+                        <i class="fa-solid fa-file-pdf file-icon"></i>
+                        <div class="file-text">
+                            <span id="file-name">checklist_sopralluogo.pdf</span>
+                            <span id="file-size">1.2 MB</span>
+                        </div>
+                    </div>
+                    <button id="remove-file-btn" class="remove-btn"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="action-bar text-center">
+                    <button id="analyze-btn" class="btn primary-btn large-btn disabled" disabled>
+                        <i class="fa-solid fa-magnifying-glass-chart"></i> Analizza Checklist con OCR
+                    </button>
+                </div>
+            </section>
+
+            <!-- STEP 2: Loading Screen (Analyzing with Real-Time Progress Bar) -->
+            <section id="loading-section" class="content-card text-center hidden tab-content">
+                <div class="loading-container">
+                    <div class="premium-loader">
+                        <div class="inner-circle"></div>
+                        <div class="outer-ring"></div>
+                        <i class="fa-solid fa-magnifying-glass loader-brain"></i>
+                    </div>
+                    <h2 id="loading-title">Elaborazione Checklist in corso...</h2>
+                    <p id="loading-description">Esecuzione dell'OCR locale e mappatura delle coordinate spaziali.</p>
+
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="progress-bar" style="width: 0%;"></div>
+                        <span class="progress-percent" id="progress-percent">0%</span>
+                    </div>
+                    <div class="progress-status-msg" id="progress-status-msg">Avvio elaborazione PDF...</div>
+
+                    <div class="loading-steps">
+                        <div class="step-item active" id="step-convert">
+                            <i class="fa-solid fa-circle-check"></i> Conversione PDF
+                        </div>
+                        <div class="step-item" id="step-ai">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i> Rilevamento Coordinate OCR
+                        </div>
+                        <div class="step-item" id="step-match">
+                            <i class="fa-solid fa-circle"></i> Abbinamento Database DVR
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 3: Interactive Checklist View (2-Column PDF Replica) -->
+            <section id="interactive-checklist-section" class="content-card hidden tab-content">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h2><i class="fa-solid fa-list-check"></i> Checklist Interattiva (Fedele al PDF Cartaceo)</h2>
+                        <p>La disposizione rispecchia esattamente il modello cartaceo a 2 colonne. Verifica o modifica i flag spuntati prima di generare la tabella finale.</p>
+                    </div>
+                    <div class="dashboard-actions">
+                        <button id="btn-select-all-cl" class="btn secondary-btn">
+                            <i class="fa-solid fa-check-double"></i> Seleziona Tutti
+                        </button>
+                        <button id="btn-deselect-all-cl" class="btn secondary-btn">
+                            <i class="fa-solid fa-square-minus"></i> Deseleziona Tutti
+                        </button>
+                        <button id="btn-apply-cl" class="btn primary-btn">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Rigenera Criticità DVR
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pdf-paper-container" id="checklist-grid-container">
+                    <!-- Populated dynamically with 2-column pages matching CHECKLIST.pdf -->
+                </div>
+            </section>
+
+            <!-- STEP 4: Results Dashboard & Word Export -->
+            <section id="results-section" class="results-dashboard hidden tab-content">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h2>Verifica e Modifica Criticità Rilevate</h2>
+                        <p>Trovate <strong id="matched-count">0</strong> criticità nel database con immagini collegate, ordinate secondo la colonna H del foglio DVR.</p>
+                    </div>
+                    <div class="dashboard-actions">
+                        <button id="btn-new-analysis" class="btn secondary-btn">
+                            <i class="fa-solid fa-arrow-left"></i> Nuova Analisi
+                        </button>
+                        <button id="btn-add-risk" class="btn secondary-btn">
+                            <i class="fa-solid fa-plus"></i> Aggiungi Criticità Manuale
+                        </button>
+                        <button id="btn-export-word" class="btn primary-btn">
+                            <i class="fa-solid fa-file-word"></i> Esporta in Word (Con Foto)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="dashboard-layout">
+                    <!-- Left Sidebar: Summary of selected items -->
+                    <div class="dashboard-sidebar">
+                        <div class="content-card sidebar-card">
+                            <h3><i class="fa-solid fa-list-check"></i> Flag Selezionati (<span id="detected-count">0</span>)</h3>
+                            <button id="btn-edit-flags" class="btn secondary-btn full-width mb-3">
+                                <i class="fa-solid fa-pen-to-square"></i> Modifica Flag in Checklist
+                            </button>
+                            <div class="detected-list" id="detected-list-container">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main column: Mapped editable risks -->
+                    <div class="dashboard-main">
+                        <div class="risks-list-header">
+                            <h3><i class="fa-solid fa-triangle-exclamation"></i> Tabella Criticità DVR (Ordinamento Colonna H + Foto)</h3>
+                            <span>Tutte le immagini estratte appariranno nella colonna "Spazio Foto" dell'esportazione Word.</span>
+                        </div>
+
+                        <div class="risks-container" id="risks-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 5: Full Database Browser Section -->
+            <section id="database-browser-section" class="content-card hidden tab-content">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h2><i class="fa-solid fa-database"></i> Consultazione & Archiviazione Database DVR</h2>
+                        <p>Esplora tutte le criticità presenti nel database Excel, aggiungine di nuove da archiviare permanentemente o inseriscile direttamente nella tabella di lavoro.</p>
+                    </div>
+                    <div class="dashboard-actions">
+                        <button id="btn-add-db-permanent" class="btn primary-btn">
+                            <i class="fa-solid fa-plus-circle"></i> Aggiungi Nuova Criticità al Database
+                        </button>
+                    </div>
+                </div>
+
+                <div class="db-search-bar">
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="db-search-input" placeholder="Cerca per Luogo, Fattore di Rischio o Azione Migliorativa...">
+                    </div>
+                    <span class="db-count-info">Voci nel Database Excel: <strong id="db-total-count">0</strong></span>
+                </div>
+
+                <div class="db-table-wrapper">
+                    <table class="db-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">Ord. (H)</th>
+                                <th style="width: 20%;">Luogo di lavoro / Impianto</th>
+                                <th style="width: 23%;">Fattore di Rischio / Anomalia</th>
+                                <th>Azione Migliorativa Proposta</th>
+                                <th style="width: 80px; text-align: center;">Foto</th>
+                                <th style="width: 100px;">Tempistica</th>
+                                <th style="width: 120px; text-align: center;">Azione</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Edit/Add Risk Modal with Custom Image Support -->
+    <div id="risk-modal" class="modal hidden">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 id="modal-title">Aggiungi Criticità</h3>
+                <button id="modal-close-btn" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="modal-luogo">Luogo di lavoro / Impianto</label>
+                    <input type="text" id="modal-luogo" placeholder="Es. Vano Scala, Terrazza, Centrale Termica">
+                </div>
+                <div class="form-group">
+                    <label for="modal-rischio">Fattore di rischio / Anomalia</label>
+                    <input type="text" id="modal-rischio" placeholder="Es. Assenza di cartellonistica di pericolo">
+                </div>
+                <div class="form-group">
+                    <label for="modal-azione">Azione migliorativa proposta</label>
+                    <textarea id="modal-azione" rows="4" placeholder="Descrivi l'azione consigliata da intraprendere..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="modal-entro">Da attuarsi entro</label>
+                    <input type="text" id="modal-entro" placeholder="Es. 3 mesi, 6 mesi, Continuo">
+                </div>
+                <div class="form-group">
+                    <label for="modal-ordine">Ordine (Colonna H)</label>
+                    <input type="number" id="modal-ordine" placeholder="Es. 10, 20, 30..." value="999">
+                </div>
+                <div class="form-group">
+                    <label for="modal-image-file">Foto Criticità (Opzionale)</label>
+                    <input type="file" id="modal-image-file" accept="image/*">
+                    <div id="modal-image-preview-container" class="image-preview-box hidden">
+                        <img id="modal-image-preview" src="" alt="Anteprima Foto">
+                        <button type="button" id="btn-remove-modal-image" class="btn secondary-btn btn-sm"><i class="fa-solid fa-xmark"></i> Rimuovi Foto</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel-btn" class="btn secondary-btn">Annulla</button>
+                <button id="modal-save-btn" class="btn primary-btn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "dvr-checklist-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-for-netlify.js",
+    "dev": "node scripts/serve-local.js"
+  }
+}
