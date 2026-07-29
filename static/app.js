@@ -10,6 +10,8 @@ function apiUrl(path) {
     return API_BASE + path;
 }
 
+console.log("API_BASE configured:", API_BASE || "NOT SET - using relative paths");
+
 // --- State ---
 let currentRisks       = [];
 let detectedKeys       = [];
