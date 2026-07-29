@@ -121,12 +121,17 @@ function initTabs() {
 function switchTab(activeTabEl, activeSectionEl) {
     console.log("switchTab:", activeSectionEl ? activeSectionEl.id : null);
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
 
     if (activeTabEl) activeTabEl.classList.add('active');
     if (activeSectionEl) {
         activeSectionEl.classList.remove('hidden');
-        activeSectionEl.style.display = 'block';
+        activeSectionEl.style.display = '';
+        activeSectionEl.style.visibility = 'visible';
         console.log("switchTab visible:", activeSectionEl.id);
     }
 
@@ -138,13 +143,18 @@ function showSection(sectionId) {
     console.log("showSection:", sectionId);
     const section = document.getElementById(sectionId);
     const isHome = sectionId === 'home-section';
-    document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
 
     if (isHome) {
         if (section) {
             section.classList.remove('hidden');
-            section.style.display = 'block';
+            section.style.display = '';
+            section.style.visibility = 'visible';
             console.log("Home section visible");
         }
         const navTabs = document.querySelector('.nav-tabs');
@@ -152,7 +162,8 @@ function showSection(sectionId) {
     } else {
         if (section) {
             section.classList.remove('hidden');
-            section.style.display = 'block';
+            section.style.display = '';
+            section.style.visibility = 'visible';
             console.log("Section visible:", sectionId);
         }
         const navTabs = document.querySelector('.nav-tabs');
