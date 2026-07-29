@@ -11,3 +11,4 @@ numpy==2.3.2
 supabase==2.15.0
 python-dotenv==1.1.0
 opencv-python-headless>=4.11.0,<5
+flask-cors==5.0.0

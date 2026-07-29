@@ -65,6 +65,10 @@ template_folder = os.path.join(BASE_DIR, 'templates')
 static_folder   = os.path.join(BASE_DIR, 'static')
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+from flask_cors import CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 # ─── Database Path Resolution (solo per compatibilità locale) ─────────────────
 DOCS_DIR      = os.path.join(os.path.expanduser("~"), "Documents", "CONTEA DVR Analyzer")
 DOCS_DB       = os.path.join(DOCS_DIR, "DATABASE.xlsx")
