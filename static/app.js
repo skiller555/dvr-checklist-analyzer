@@ -119,34 +119,51 @@ function initTabs() {
 }
 
 function switchTab(activeTabEl, activeSectionEl) {
+    console.log("switchTab:", activeSectionEl ? activeSectionEl.id : null);
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
 
     if (activeTabEl) activeTabEl.classList.add('active');
-    if (activeSectionEl) activeSectionEl.classList.remove('hidden');
+    if (activeSectionEl) {
+        activeSectionEl.classList.remove('hidden');
+        activeSectionEl.style.display = 'block';
+        console.log("switchTab visible:", activeSectionEl.id);
+    }
 
     const navTabs = document.querySelector('.nav-tabs');
     if (navTabs) navTabs.style.visibility = 'visible';
 }
 
 function showSection(sectionId) {
+    console.log("showSection:", sectionId);
     const section = document.getElementById(sectionId);
     const isHome = sectionId === 'home-section';
     document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
 
     if (isHome) {
-        if (section) section.classList.remove('hidden');
-        document.querySelector('.nav-tabs').style.visibility = 'hidden';
+        if (section) {
+            section.classList.remove('hidden');
+            section.style.display = 'block';
+            console.log("Home section visible");
+        }
+        const navTabs = document.querySelector('.nav-tabs');
+        if (navTabs) navTabs.style.visibility = 'hidden';
     } else {
-        if (section) section.classList.remove('hidden');
-        document.querySelector('.nav-tabs').style.visibility = 'visible';
+        if (section) {
+            section.classList.remove('hidden');
+            section.style.display = 'block';
+            console.log("Section visible:", sectionId);
+        }
+        const navTabs = document.querySelector('.nav-tabs');
+        if (navTabs) navTabs.style.visibility = 'visible';
         const tab = document.querySelector(`.nav-tab[data-target="${sectionId}"]`);
         if (tab) tab.classList.add('active');
     }
 }
 
 function goHome() {
+    console.log("goHome");
     currentRisks = [];
     detectedKeys = [];
     updateInteractiveChecklistState([]);
