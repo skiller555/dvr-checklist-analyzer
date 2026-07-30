@@ -13,7 +13,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
-from flask_login import LoginManager, UserMixin, login_required, current_user, logout_user
+from flask_login import LoginManager, UserMixin, login_required, current_user, logout_user, login_user
 
 import pytesseract
 from PIL import Image
