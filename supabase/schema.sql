@@ -2,6 +2,16 @@
 -- DVR Checklist Analyzer - Supabase Schema
 -- ============================================
 
+-- Tabella: users
+-- Gestione utenti per login
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'user',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Tabella: checklist_items
 -- Sostituisce il foglio "CHECK LIST" di Excel
 CREATE TABLE IF NOT EXISTS checklist_items (

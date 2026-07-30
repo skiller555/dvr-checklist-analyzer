@@ -1423,3 +1423,96 @@ body {
     line-height: 1.4;
 }
 
+/* ─── Login Screen ───────────────────────────────────────────────────────── */
+
+.login-container {
+    max-width: 420px;
+    margin: 2rem auto;
+    text-align: center;
+}
+
+.login-logo {
+    margin-bottom: 1.5rem;
+}
+
+.login-logo i {
+    font-size: 3rem;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+}
+
+.login-logo h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.8rem;
+    margin-top: 0.5rem;
+}
+
+.login-logo p {
+    color: hsl(var(--text-muted));
+    margin-top: 0.25rem;
+}
+
+.login-form {
+    text-align: left;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 1.5rem;
+    border-radius: 16px;
+    border: 1px solid hsla(var(--border), 0.5);
+}
+
+.login-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.login-form label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.9rem;
+    color: hsl(var(--text-muted));
+}
+
+.login-form input {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid hsla(var(--border), 0.6);
+    border-radius: 10px;
+    color: hsl(var(--text-main));
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.login-form input:focus {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 3px hsla(var(--primary), 0.2);
+}
+
+.login-error {
+    margin-top: 0.75rem;
+    color: hsl(var(--danger));
+    font-size: 0.9rem;
+}
+
+.login-error.hidden {
+    display: none;
+}
+
+/* ─── Header Auth ────────────────────────────────────────────────────────── */
+
+.auth-area {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.auth-area.hidden {
+    display: none !important;
+}
+
+.current-user {
+    font-size: 0.85rem;
+    color: hsl(var(--text-muted));
+}
+

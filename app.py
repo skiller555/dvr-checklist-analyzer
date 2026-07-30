@@ -10,6 +10,8 @@ from docx.enum.section import WD_ORIENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from flask import Flask, request, jsonify, render_template, send_file
+from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_required, current_user, logout_user
 
 import pytesseract
 from PIL import Image
@@ -17,6 +19,30 @@ from PIL import Image
 import sys
 import webbrowser
 import threading
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# ─── Flask-Login Setup ─────────────────────────────────────────────────────────
+login_manager = LoginManager()
+login_manager.login_view = None
+
+class User(UserMixin):
+    def __init__(self, id, username, role='user'):
+        self.id = str(id)
+        self.username = username
+        self.role = role
+
+@login_manager.user_loader
+def load_user(user_id):
+    if DB_ADAPTER is None:
+        return None
+    try:
+        user_data = DB_ADAPTER.get_user_by_id(user_id)
+        if user_data:
+            return User(user_data['id'], user_data['username'], user_data.get('role', 'user'))
+    except Exception:
+        pass
+    return None
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # ─── Database Adapter ─────────────────────────────────────────────────────────
 DB_ADAPTER = None
@@ -64,10 +90,14 @@ elif os.path.exists(USER_TESS):
 template_folder = os.path.join(BASE_DIR, 'templates')
 static_folder   = os.path.join(BASE_DIR, 'static')
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 from flask_cors import CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# ─── Flask-Login ──────────────────────────────────────────────────────────────
+login_manager.init_app(app)
 
 # ─── Database Path Resolution (solo per compatibilità locale) ─────────────────
 DOCS_DIR      = os.path.join(os.path.expanduser("~"), "Documents", "CONTEA DVR Analyzer")
@@ -89,6 +119,92 @@ def get_db_path():
 
 DB_PATH = get_db_path()
 init_db_adapter()
+
+def create_default_admin():
+    if DB_ADAPTER is None:
+        return
+    try:
+        users = DB_ADAPTER.get_all_users()
+        if not users:
+            password_hash = generate_password_hash("admin")
+            DB_ADAPTER.add_user("admin", password_hash, "admin")
+            print("Creato utente admin di default: admin / admin")
+    except Exception as e:
+        print("Errore creazione admin default:", e)
+
+create_default_admin()
+
+# ─── Auth Routes ──────────────────────────────────────────────────────────────
+
+@app.route('/api/me', methods=['GET'])
+@login_required
+def api_me():
+    return jsonify({
+        "logged_in": True,
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "role": getattr(current_user, 'role', 'user')
+        }
+    })
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.json or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not username or not password:
+        return jsonify({"error": "Username e password richiesti."}), 400
+    if DB_ADAPTER is None:
+        return jsonify({"error": "Database non inizializzato."}), 500
+    user = DB_ADAPTER.get_user_by_username(username)
+    if not user or not check_password_hash(user['password_hash'], password):
+        return jsonify({"error": "Credenziali non valide."}), 401
+    login_user(User(user['id'], user['username'], user.get('role', 'user')))
+    return jsonify({"success": True, "user": {"username": user['username'], "role": user.get('role', 'user')}})
+
+@app.route('/api/logout', methods=['POST'])
+@login_required
+def api_logout():
+    logout_user()
+    return jsonify({"success": True})
+
+@app.route('/api/admin/users', methods=['GET'])
+@login_required
+def api_admin_users():
+    if getattr(current_user, 'role', 'user') != 'admin':
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    users = DB_ADAPTER.get_all_users()
+    return jsonify({"success": True, "users": users})
+
+@app.route('/api/admin/users', methods=['POST'])
+@login_required
+def api_admin_add_user():
+    if getattr(current_user, 'role', 'user') != 'admin':
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    data = request.json or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    role = (data.get("role") or "user").strip()
+    if not username or not password:
+        return jsonify({"error": "Username e password richiesti."}), 400
+    password_hash = generate_password_hash(password)
+    result = DB_ADAPTER.add_user(username, password_hash, role)
+    if not result.get("success"):
+        return jsonify({"error": result.get("error", "Errore creazione utente.")}), 400
+    return jsonify({"success": True, "message": "Utente creato."})
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def api_admin_delete_user(user_id):
+    if getattr(current_user, 'role', 'user') != 'admin':
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    if current_user.id == str(user_id):
+        return jsonify({"error": "Non puoi eliminare te stesso."}), 400
+    result = DB_ADAPTER.delete_user(user_id)
+    if not result.get("success"):
+        return jsonify({"error": result.get("error", "Errore eliminazione.")}), 400
+    return jsonify({"success": True})
 
 # ─── Database helpers (compatibilità) ─────────────────────────────────────────
 
@@ -432,11 +548,13 @@ def index():
     return render_template('index.html')
 
 @app.route('/api/progress/<session_id>', methods=['GET'])
+@login_required
 def get_progress(session_id):
     prog = ANALYSIS_PROGRESS.get(session_id, {"pct": 0, "msg": "Inizializzazione..."})
     return jsonify(prog)
 
 @app.route('/api/checklist_structure', methods=['GET'])
+@login_required
 def checklist_structure():
     try:
         data = get_structured_checklist()
@@ -445,6 +563,7 @@ def checklist_structure():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/database_risks', methods=['GET'])
+@login_required
 def database_risks():
     try:
         risks = get_all_dvr_risks()
@@ -453,6 +572,7 @@ def database_risks():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/add_database_risk', methods=['POST'])
+@login_required
 def add_database_risk():
     global _excel_row_images_cache
     try:
@@ -492,6 +612,7 @@ def add_database_risk():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/match_keys', methods=['POST'])
+@login_required
 def match_selected_keys():
     try:
         data = request.json or {}
@@ -502,6 +623,7 @@ def match_selected_keys():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/analyze', methods=['POST'])
+@login_required
 def analyze_pdf():
     if 'file' not in request.files:
         return jsonify({"error": "Nessun file caricato"}), 400
@@ -536,6 +658,7 @@ def analyze_pdf():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/generate_docx', methods=['POST'])
+@login_required
 def generate_docx():
     import base64
     from docx.enum.table import WD_ALIGN_VERTICAL

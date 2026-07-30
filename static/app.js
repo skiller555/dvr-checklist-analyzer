@@ -21,6 +21,7 @@ let editingIndex       = null;
 let selectedFile       = null;
 let progressInterval   = null;
 let currentModalImage  = null;
+let currentUser        = null;
 
 // --- DOM Refs ---
 const dropzone               = document.getElementById('dropzone');
@@ -83,6 +84,28 @@ const modalCloseBtn          = document.getElementById('modal-close-btn');
 const modalCancelBtn         = document.getElementById('modal-cancel-btn');
 const modalSaveBtn           = document.getElementById('modal-save-btn');
 
+const loginSection           = document.getElementById('login-section');
+const loginForm              = document.getElementById('login-form');
+const loginUsernameInput     = document.getElementById('login-username');
+const loginPasswordInput     = document.getElementById('login-password');
+const loginError             = document.getElementById('login-error');
+const authArea               = document.getElementById('auth-area');
+const currentUsernameEl      = document.getElementById('current-username');
+const btnAdmin               = document.getElementById('btn-admin');
+const btnLogout              = document.getElementById('btn-logout');
+const adminSection           = document.getElementById('admin-section');
+const adminUsersBody         = document.getElementById('admin-users-body');
+const btnAddUser             = document.getElementById('btn-add-user');
+const adminSearchInput       = document.getElementById('admin-search-input');
+const userModal              = document.getElementById('user-modal');
+const userModalTitle         = document.getElementById('user-modal-title');
+const userModalUsername      = document.getElementById('user-modal-username');
+const userModalPassword      = document.getElementById('user-modal-password');
+const userModalRole          = document.getElementById('user-modal-role');
+const userModalCloseBtn      = document.getElementById('user-modal-close-btn');
+const userModalCancelBtn     = document.getElementById('user-modal-cancel-btn');
+const userModalSaveBtn       = document.getElementById('user-modal-save-btn');
+
 // ─── Page & Section Mapping for 2-Column PDF Layout ────────────────────────
 const PAGE1_LEFT  = ['CARATTERISTICHE EDIFICIO', 'TERRAZZA CONDOMINIALE', 'LOCALE LAVATOIO'];
 const PAGE1_RIGHT = ['CONTATORI ELETTRICI', 'CANTINE', 'CHIOSTRINA CONDOMINIALE', 'AUTORIMESSA >300 / 10 posti auto', 'AUTORIMESSA <300 / 10 posti auto'];
@@ -96,9 +119,9 @@ const PAGE3_FULL  = ['DIPENDENTE CONDOMINIALE'];
 
 document.addEventListener('DOMContentLoaded', async () => {
     initTabs();
+    initAuth();
     await loadChecklistStructure();
     await loadDatabaseRisks();
-    showSection('home-section');
     const tabHome = document.getElementById('tab-home');
     if (tabHome) {
         tabHome.addEventListener('click', () => goHome());
@@ -182,13 +205,255 @@ function goHome() {
     updateInteractiveChecklistState([]);
     renderRisks();
     clearFile();
-    showSection('home-section');
+    if (!currentUser) {
+        showLogin();
+    } else {
+        showSection('home-section');
+    }
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+async function initAuth() {
+    try {
+        const res = await fetch(apiUrl('/api/me'), { credentials: 'include' });
+        if (res.ok) {
+            const data = await res.json();
+            setCurrentUser(data.user);
+            showHome();
+        } else {
+            showLogin();
+        }
+    } catch (e) {
+        showLogin();
+    }
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = loginUsernameInput.value.trim();
+            const password = loginPasswordInput.value;
+            try {
+                const res = await fetch(apiUrl('/api/login'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    loginError.textContent = data.error || 'Credenziali non valide.';
+                    loginError.classList.remove('hidden');
+                    return;
+                }
+                setCurrentUser(data.user);
+                showHome();
+                loginError.classList.add('hidden');
+                loginUsernameInput.value = '';
+                loginPasswordInput.value = '';
+            } catch (err) {
+                loginError.textContent = 'Errore di connessione.';
+                loginError.classList.remove('hidden');
+            }
+        });
+    }
+
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            try {
+                await fetch(apiUrl('/api/logout'), { method: 'POST', credentials: 'include' });
+            } catch (e) {
+                // ignore
+            }
+            setCurrentUser(null);
+            showLogin();
+        });
+    }
+
+    if (btnAdmin) {
+        btnAdmin.addEventListener('click', () => {
+            showSection('admin-section');
+            loadAdminUsers();
+        });
+    }
+
+    if (btnAddUser) {
+        btnAddUser.addEventListener('click', () => {
+            openUserModal();
+        });
+    }
+
+    if (userModalSaveBtn) {
+        userModalSaveBtn.addEventListener('click', async () => {
+            const username = userModalUsername.value.trim();
+            const password = userModalPassword.value;
+            const role = userModalRole.value;
+            if (!username || !password) {
+                showToast('Utente e password obbligatori.', 'error');
+                return;
+            }
+            try {
+                const res = await fetch(apiUrl('/api/admin/users'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password, role })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore creazione utente.', 'error');
+                    return;
+                }
+                showToast('Utente creato.', 'success');
+                closeUserModal();
+                loadAdminUsers();
+            } catch (err) {
+                showToast('Errore di connessione.', 'error');
+            }
+        });
+    }
+
+    if (userModalCloseBtn) {
+        userModalCloseBtn.addEventListener('click', closeUserModal);
+    }
+    if (userModalCancelBtn) {
+        userModalCancelBtn.addEventListener('click', closeUserModal);
+    }
+    if (userModal) {
+        userModal.addEventListener('click', (e) => { if (e.target === userModal) closeUserModal(); });
+    }
+
+    if (adminSearchInput) {
+        adminSearchInput.addEventListener('input', () => {
+            const q = adminSearchInput.value.toLowerCase().trim();
+            const rows = Array.from(adminUsersBody.querySelectorAll('tr'));
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(q) ? '' : 'none';
+            });
+        });
+    }
+}
+
+function setCurrentUser(user) {
+    currentUser = user;
+    if (user) {
+        currentUsernameEl.textContent = user.username;
+        authArea.classList.remove('hidden');
+        if (user.role === 'admin') {
+            btnAdmin.classList.remove('hidden');
+        } else {
+            btnAdmin.classList.add('hidden');
+        }
+    } else {
+        authArea.classList.add('hidden');
+        btnAdmin.classList.add('hidden');
+    }
+}
+
+function showLogin() {
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
+    if (loginSection) {
+        loginSection.classList.remove('hidden');
+        loginSection.style.display = '';
+        loginSection.style.visibility = 'visible';
+    }
+    const navTabs = document.querySelector('.nav-tabs');
+    if (navTabs) navTabs.style.visibility = 'hidden';
+}
+
+function showHome() {
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
+    const navTabs = document.querySelector('.nav-tabs');
+    if (navTabs) navTabs.style.visibility = 'visible';
+    if (homeSection) {
+        homeSection.classList.remove('hidden');
+        homeSection.style.display = '';
+        homeSection.style.visibility = 'visible';
+    }
+}
+
+function openUserModal() {
+    userModalUsername.value = '';
+    userModalPassword.value = '';
+    userModalRole.value = 'user';
+    userModalTitle.textContent = 'Nuovo Utente';
+    userModal.classList.remove('hidden');
+}
+
+function closeUserModal() {
+    userModal.classList.add('hidden');
+}
+
+async function loadAdminUsers() {
+    try {
+        const res = await fetch(apiUrl('/api/admin/users'), { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            showToast(data.error || 'Errore caricamento utenti.', 'error');
+            return;
+        }
+        renderAdminUsers(data.users || []);
+    } catch (e) {
+        showToast('Errore di connessione.', 'error');
+    }
+}
+
+function renderAdminUsers(users) {
+    adminUsersBody.innerHTML = '';
+    users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${u.id}</td>
+            <td><strong>${escHtml(u.username)}</strong></td>
+            <td><span class="order-badge">${escHtml(u.role)}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+                <button class="btn secondary-btn btn-sm delete-user-btn" data-id="${u.id}">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
+        `;
+        adminUsersBody.appendChild(tr);
+    });
+    adminUsersBody.querySelectorAll('.delete-user-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            if (!confirm('Eliminare questo utente?')) return;
+            try {
+                const res = await fetch(apiUrl(`/api/admin/users/${id}`), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore eliminazione.', 'error');
+                    return;
+                }
+                showToast('Utente eliminato.', 'success');
+                loadAdminUsers();
+            } catch (e) {
+                showToast('Errore di connessione.', 'error');
+            }
+        });
+    });
 }
 
 // ─── Home Options ──────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.home-card').forEach(card => {
     card.addEventListener('click', async () => {
+        if (!currentUser) {
+            showLogin();
+            return;
+        }
         const action = card.dataset.action;
         if (action === 'import-pdf') {
             switchTab(document.querySelector('[data-target="upload-section"]'), uploadSection);

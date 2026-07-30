@@ -51,11 +51,41 @@
                     <span class="status-dot green"></span>
                     <span>Offline Mode</span>
                 </div>
+                <div id="auth-area" class="auth-area hidden">
+                    <span id="current-username" class="current-user"></span>
+                    <button id="btn-admin" class="btn secondary-btn btn-sm hidden"><i class="fa-solid fa-user-gear"></i> Admin</button>
+                    <button id="btn-logout" class="btn secondary-btn btn-sm"><i class="fa-solid fa-right-from-bracket"></i> Esci</button>
+                </div>
             </div>
         </header>
 
         <!-- Main Content Area -->
         <main class="main-content">
+
+            <!-- LOGIN -->
+            <section id="login-section" class="content-card tab-content">
+                <div class="login-container">
+                    <div class="login-logo">
+                        <i class="fa-solid fa-clipboard-check icon-logo"></i>
+                        <h1>DVR Checklist</h1>
+                        <p>Accedi per continuare</p>
+                    </div>
+                    <form id="login-form" class="login-form">
+                        <div class="form-group">
+                            <label for="login-username">Utente</label>
+                            <input type="text" id="login-username" placeholder="Inserisci utente" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Password</label>
+                            <input type="password" id="login-password" placeholder="Inserisci password" required>
+                        </div>
+                        <button type="submit" class="btn primary-btn large-btn full-width">
+                            <i class="fa-solid fa-right-to-bracket"></i> Accedi
+                        </button>
+                        <p id="login-error" class="login-error hidden"></p>
+                    </form>
+                </div>
+            </section>
 
             <!-- HOME: Scelta modalità -->
             <section id="home-section" class="content-card tab-content">
@@ -267,6 +297,38 @@
                 </div>
             </section>
 
+            <!-- ADMIN: Gestione utenti -->
+            <section id="admin-section" class="content-card hidden tab-content">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h2><i class="fa-solid fa-user-gear"></i> Gestione Utenti</h2>
+                        <p>Crea e gestisci gli account che possono accedere all'applicazione.</p>
+                    </div>
+                </div>
+                <div class="db-search-bar">
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="admin-search-input" placeholder="Cerca utente...">
+                    </div>
+                    <button id="btn-add-user" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Nuovo Utente</button>
+                </div>
+                <div class="db-table-wrapper">
+                    <table class="db-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th>Utente</th>
+                                <th>Ruolo</th>
+                                <th style="width: 120px; text-align: center;">Azione</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -310,6 +372,37 @@
             <div class="modal-footer">
                 <button id="modal-cancel-btn" class="btn secondary-btn">Annulla</button>
                 <button id="modal-save-btn" class="btn primary-btn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin User Modal -->
+    <div id="user-modal" class="modal hidden">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 id="user-modal-title">Nuovo Utente</h3>
+                <button id="user-modal-close-btn" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="user-modal-username">Utente</label>
+                    <input type="text" id="user-modal-username" placeholder="Nome utente">
+                </div>
+                <div class="form-group">
+                    <label for="user-modal-password">Password</label>
+                    <input type="text" id="user-modal-password" placeholder="Password">
+                </div>
+                <div class="form-group">
+                    <label for="user-modal-role">Ruolo</label>
+                    <select id="user-modal-role">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="user-modal-cancel-btn" class="btn secondary-btn">Annulla</button>
+                <button id="user-modal-save-btn" class="btn primary-btn">Salva</button>
             </div>
         </div>
     </div>

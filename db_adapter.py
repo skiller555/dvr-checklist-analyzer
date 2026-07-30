@@ -7,6 +7,8 @@ Supporta due backend:
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any
 import re
+import os
+import json
 
 
 class DatabaseAdapter(ABC):
@@ -33,6 +35,7 @@ class ExcelAdapter(DatabaseAdapter):
         self._checklist_cache = None
         self._risks_cache = None
         self._images_cache = None
+        self._users_path = os.path.join(os.path.expanduser("~"), "Documents", "CONTEA DVR Analyzer", "users.json")
 
     def _get_images_map(self):
         if self._images_cache is not None:
@@ -216,7 +219,42 @@ class SupabaseAdapter(DatabaseAdapter):
         from supabase import create_client
         self.client = create_client(url, key)
 
-    def get_checklist_items(self) -> List[Dict[str, Any]]:
+    # ... existing methods ...
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        resp = self.client.table("users").select("*").eq("username", username).limit(1).execute()
+        data = resp.data or []
+        return data[0] if data else None
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            resp = self.client.table("users").select("*").eq("id", int(user_id)).limit(1).execute()
+            data = resp.data or []
+            return data[0] if data else None
+        except Exception:
+            return None
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        resp = self.client.table("users").select("id, username, role, created_at").order("username").execute()
+        return resp.data or []
+
+    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+        try:
+            resp = self.client.table("users").insert({
+                "username": username,
+                "password_hash": password_hash,
+                "role": role
+            }).execute()
+            return {"success": True, "id": resp.data[0]['id'] if resp.data else None}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_user(self, user_id: int) -> Dict[str, Any]:
+        try:
+            self.client.table("users").delete().eq("id", user_id).execute()
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
         resp = self.client.table("checklist_items").select("*").order("category").execute()
         data = resp.data or []
         return [
@@ -292,6 +330,78 @@ class SupabaseAdapter(DatabaseAdapter):
         k = re.sub(r'\(.*?\)', '', k)
         k = re.sub(r'[^a-z0-9\s]', ' ', k)
         return " ".join(k.split())
+
+    def _load_users(self) -> Dict[str, Any]:
+        if not os.path.exists(self._users_path):
+            return {"users": []}
+        try:
+            with open(self._users_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {"users": []}
+
+    def _save_users(self, data: Dict[str, Any]) -> None:
+        os.makedirs(os.path.dirname(self._users_path), exist_ok=True)
+        with open(self._users_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        data = self._load_users()
+        for u in data.get("users", []):
+            if u.get("username") == username:
+                return u
+        return None
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            uid = int(user_id)
+            data = self._load_users()
+            for u in data.get("users", []):
+                if u.get("id") == uid:
+                    return u
+        except Exception:
+            pass
+        return None
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        data = self._load_users()
+        users = data.get("users", [])
+        return [
+            {
+                "id": u.get("id"),
+                "username": u.get("username", ""),
+                "role": u.get("role", "user"),
+                "created_at": u.get("created_at", "")
+            }
+            for u in users
+        ]
+
+    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+        data = self._load_users()
+        users = data.get("users", [])
+        if any(u.get("username") == username for u in users):
+            return {"success": False, "error": "Username già esistente."}
+        new_id = (max((u.get("id", 0) for u in users), default=0) + 1)
+        users.append({
+            "id": new_id,
+            "username": username,
+            "password_hash": password_hash,
+            "role": role,
+            "created_at": __import__('datetime').datetime.now().isoformat()
+        })
+        data["users"] = users
+        self._save_users(data)
+        return {"success": True, "id": new_id}
+
+    def delete_user(self, user_id: int) -> Dict[str, Any]:
+        try:
+            data = self._load_users()
+            users = [u for u in data.get("users", []) if u.get("id") != user_id]
+            data["users"] = users
+            self._save_users(data)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 def get_adapter(backend: str = "local", **kwargs) -> DatabaseAdapter:
