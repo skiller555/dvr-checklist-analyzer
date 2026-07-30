@@ -2,6 +2,8 @@ import os
 import json
 import re
 import io
+import base64
+import urllib.request
 import fitz  # PyMuPDF
 import openpyxl
 import docx
@@ -20,6 +22,7 @@ import sys
 import webbrowser
 import threading
 from werkzeug.security import generate_password_hash, check_password_hash
+import bcrypt
 
 # ─── Flask-Login Setup ─────────────────────────────────────────────────────────
 login_manager = LoginManager()
@@ -42,7 +45,6 @@ def load_user(user_id):
     except Exception:
         pass
     return None
-from werkzeug.security import generate_password_hash, check_password_hash
 
 # ─── Database Adapter ─────────────────────────────────────────────────────────
 DB_ADAPTER = None
@@ -165,7 +167,20 @@ def api_login():
     if DB_ADAPTER is None:
         return jsonify({"error": "Database non inizializzato."}), 500
     user = DB_ADAPTER.get_user_by_username(username)
-    if not user or not check_password_hash(user['password_hash'], password):
+    if not user:
+        return jsonify({"error": "Credenziali non valide."}), 401
+
+    password_hash = user.get('password_hash') or ''
+    valid = False
+    try:
+        if password_hash.startswith('pbkdf2:') or password_hash.startswith('scrypt:'):
+            valid = check_password_hash(password_hash, password)
+        else:
+            valid = bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception:
+        valid = False
+
+    if not valid:
         return jsonify({"error": "Credenziali non valide."}), 401
     login_user(User(user['id'], user['username'], user.get('role', 'user')))
     return jsonify({"success": True, "user": {"username": user['username'], "role": user.get('role', 'user')}})
