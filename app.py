@@ -94,7 +94,14 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 from flask_cors import CORS
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+NETLIFY_ORIGIN = os.environ.get("NETLIFY_ORIGIN", "https://dvr-app.netlify.app")
+CORS(
+    app,
+    resources={r"/api/*": {"origins": [NETLIFY_ORIGIN]}},
+    supports_credentials=True,
+    allow_headers=["Content-Type"],
+    methods=["GET", "POST", "DELETE", "OPTIONS"]
+)
 
 # ─── Flask-Login ──────────────────────────────────────────────────────────────
 login_manager.init_app(app)
