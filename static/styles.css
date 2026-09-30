@@ -884,7 +884,7 @@ body {
 
 /* Helper Utilities */
 .hidden {
-    display: none !important;
+    display: none;
 }
 
 /* Responsiveness */

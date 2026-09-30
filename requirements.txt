@@ -8,9 +8,11 @@ pytesseract==0.3.13
 pillow==12.3.0
 lxml==6.1.1
 numpy==2.3.2
+psycopg2-binary>=2.9.0
 supabase==2.15.0
 python-dotenv==1.1.0
 opencv-python-headless>=4.11.0,<5
 flask-cors==5.0.0
 flask-login==0.6.3
 bcrypt>=4.0.0,<5
+PyJWT==2.9.0

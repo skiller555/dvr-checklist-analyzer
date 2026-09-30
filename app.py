@@ -51,8 +51,19 @@ DB_ADAPTER = None
 
 def init_db_adapter():
     global DB_ADAPTER
-    backend = os.environ.get("DB_BACKEND", "local").lower()
-    if backend == "supabase":
+    backend = os.environ.get("DB_BACKEND", "").lower()
+    db_url = (
+        os.environ.get("DATABASE_URL") or 
+        os.environ.get("DB_URL") or 
+        os.environ.get("NEON_DATABASE_URL") or 
+        os.environ.get("POSTGRES_URL") or 
+        os.environ.get("DATABASE_URI", "")
+    )
+    if backend in ["neon", "postgres", "postgresql"] or (db_url and "neon.tech" in db_url):
+        from db_adapter import get_adapter
+        DB_ADAPTER = get_adapter(backend="neon", database_url=db_url)
+        print("Database backend: Neon PostgreSQL")
+    elif backend == "supabase":
         from db_adapter import get_adapter
         DB_ADAPTER = get_adapter(
             backend="supabase",
