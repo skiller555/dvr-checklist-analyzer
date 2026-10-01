@@ -1,7 +1,8 @@
 """
 Database abstraction layer per DVR Checklist Analyzer.
-Supporta due backend:
-- 'local': Excel locale (comportamento attuale)
+Supporta tre backend:
+- 'local': Excel locale + JSON utenti
+- 'neon': Neon.tech PostgreSQL (100% Gratuito Cloud)
 - 'supabase': Supabase PostgreSQL + Storage
 """
 from abc import ABC, abstractmethod
@@ -28,6 +29,26 @@ class DatabaseAdapter(ABC):
     def add_database_risk(self, risk: Dict[str, Any]) -> Dict[str, Any]:
         pass
 
+    @abstractmethod
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def delete_user(self, user_id: int) -> Dict[str, Any]:
+        pass
+
 
 class ExcelAdapter(DatabaseAdapter):
     def __init__(self, db_path: str):
@@ -40,12 +61,8 @@ class ExcelAdapter(DatabaseAdapter):
     def _get_images_map(self):
         if self._images_cache is not None:
             return self._images_cache
-        import zipfile
-        import xml.etree.ElementTree as ET
-        import base64
-
         self._images_cache = {}
-        if not __import__('os').path.exists(self.db_path):
+        if not os.path.exists(self.db_path):
             return self._images_cache
 
         try:
@@ -204,6 +221,58 @@ class ExcelAdapter(DatabaseAdapter):
         self._risks_cache = None
         return {"success": True, "message": "Criticità salvata in Excel."}
 
+    def _read_users(self):
+        if not os.path.exists(self._users_path):
+            return []
+        try:
+            with open(self._users_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _write_users(self, users):
+        os.makedirs(os.path.dirname(self._users_path), exist_ok=True)
+        with open(self._users_path, 'w', encoding='utf-8') as f:
+            json.dump(users, f, indent=2)
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        users = self._read_users()
+        for u in users:
+            if u.get('username') == username:
+                return u
+        return None
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        users = self._read_users()
+        for u in users:
+            if str(u.get('id')) == str(user_id):
+                return u
+        return None
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        return self._read_users()
+
+    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+        users = self._read_users()
+        if any(u.get('username') == username for u in users):
+            return {"success": False, "error": "Username già esistente"}
+        new_id = max([u.get('id', 0) for u in users], default=0) + 1
+        new_user = {
+            "id": new_id,
+            "username": username,
+            "password_hash": password_hash,
+            "role": role
+        }
+        users.append(new_user)
+        self._write_users(users)
+        return {"success": True, "id": new_id}
+
+    def delete_user(self, user_id: int) -> Dict[str, Any]:
+        users = self._read_users()
+        users = [u for u in users if str(u.get('id')) != str(user_id)]
+        self._write_users(users)
+        return {"success": True}
+
     @staticmethod
     def _normalize(k):
         if not k:
@@ -212,6 +281,206 @@ class ExcelAdapter(DatabaseAdapter):
         k = re.sub(r'\(.*?\)', '', k)
         k = re.sub(r'[^a-z0-9\s]', ' ', k)
         return " ".join(k.split())
+
+
+class NeonAdapter(DatabaseAdapter):
+    def __init__(self, database_url: str):
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        self.database_url = database_url
+        self.init_schema()
+
+    def _get_conn(self):
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(self.database_url, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=3)
+        conn.autocommit = True
+        return conn
+
+    def _execute_http(self, sql: str, fetchall=False, fetchone=False):
+        import json
+        import urllib.request
+        parts = self.database_url.split("@")
+        host_part = parts[1].split("/")[0].split(":")[0] if len(parts) > 1 else "ep-autumn-darkness-b160gyre-pooler.c-5.eu-central-1.aws.neon.tech"
+        endpoint = f"https://{host_part}/sql"
+
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps({"query": sql}).encode("utf-8"),
+            headers={
+                "Neon-Connection-String": self.database_url,
+                "Content-Type": "application/json"
+            }
+        )
+        res = urllib.request.urlopen(req)
+        data = json.loads(res.read().decode("utf-8"))
+        if fetchall or fetchone:
+            rows = data.get("rows", [])
+            if fetchone:
+                return rows[0] if rows else None
+            return rows
+        return None
+
+    def _execute_sql(self, sql: str, fetchall=False, fetchone=False):
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+                    if fetchall:
+                        return cur.fetchall()
+                    if fetchone:
+                        return cur.fetchone()
+                    return None
+        except Exception:
+            return self._execute_http(sql, fetchall=fetchall, fetchone=fetchone)
+
+    def init_schema(self):
+        statements = [
+            """CREATE TABLE IF NOT EXISTS users (
+                id BIGSERIAL PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );""",
+            """CREATE TABLE IF NOT EXISTS checklist_items (
+                id BIGSERIAL PRIMARY KEY,
+                category TEXT NOT NULL DEFAULT 'GENERALE',
+                item TEXT NOT NULL,
+                key TEXT NOT NULL UNIQUE,
+                is_checkbox BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );""",
+            """CREATE TABLE IF NOT EXISTS dvr_risks (
+                id BIGSERIAL PRIMARY KEY,
+                luogo TEXT DEFAULT '',
+                rischio TEXT NOT NULL DEFAULT '',
+                azione TEXT DEFAULT '',
+                entro TEXT DEFAULT '',
+                key TEXT DEFAULT '',
+                ordine INTEGER DEFAULT 999999,
+                image_url TEXT DEFAULT '',
+                is_falso BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );"""
+        ]
+        for stmt in statements:
+            try:
+                self._execute_sql(stmt)
+            except Exception as e:
+                print("Inizializzazione schema Neon/PostgreSQL:", e)
+
+    def get_checklist_items(self) -> List[Dict[str, Any]]:
+        rows = self._execute_sql("SELECT category, item, key, is_checkbox FROM checklist_items ORDER BY category, id;", fetchall=True) or []
+        return [
+            {
+                'category': r['category'] or '',
+                'item': r['item'] or '',
+                'key': r['key'] or '',
+                'is_checkbox': bool(r['is_checkbox'])
+            }
+            for r in rows
+        ]
+
+    def get_all_dvr_risks(self) -> List[Dict[str, Any]]:
+        rows = self._execute_sql("SELECT luogo, rischio, azione, entro, key, ordine, image_url FROM dvr_risks ORDER BY ordine, id;", fetchall=True) or []
+        return [
+            {
+                'luogo': r['luogo'] or '',
+                'rischio': r['rischio'] or '',
+                'azione': r['azione'] or '',
+                'entro': r['entro'] or '',
+                'key': r['key'] or '',
+                'ordine': r['ordine'] if r['ordine'] is not None else 999999,
+                'image': r['image_url'] or ''
+            }
+            for r in rows
+        ]
+
+    def match_risks(self, checked_keys: List[str]) -> List[Dict[str, Any]]:
+        risks = self.get_all_dvr_risks()
+        matched = []
+        used = set()
+        norm_ck = [self._normalize(k) for k in checked_keys]
+        for i, ck in enumerate(checked_keys):
+            n = norm_ck[i]
+            if not n:
+                continue
+            for j, r in enumerate(risks):
+                if j in used:
+                    continue
+                nr = self._normalize(r['key'])
+                if nr == n or n in nr or nr in n:
+                    matched.append({**r, 'key': ck})
+                    used.add(j)
+                    break
+        matched.sort(key=lambda x: x.get('ordine', 999999))
+        return matched
+
+    def add_database_risk(self, risk: Dict[str, Any]) -> Dict[str, Any]:
+        ord_val = risk.get('ordine', 999999)
+        try:
+            ordine = int(ord_val) if ord_val is not None else 999999
+        except:
+            ordine = 999999
+        key_val = (risk.get('rischio') or risk.get('luogo') or "").replace("'", "''")
+        luogo = (risk.get('luogo') or '').replace("'", "''")
+        rischio = (risk.get('rischio') or '').replace("'", "''")
+        azione = (risk.get('azione') or '').replace("'", "''")
+        entro = (risk.get('entro') or '').replace("'", "''")
+        img = (risk.get('image') or '').replace("'", "''")
+
+        sql = f"""
+            INSERT INTO dvr_risks (luogo, rischio, azione, entro, key, ordine, image_url)
+            VALUES ('{luogo}', '{rischio}', '{azione}', '{entro}', '{key_val}', {ordine}, '{img}')
+            RETURNING id;
+        """
+        row = self._execute_sql(sql, fetchone=True)
+        return {"success": True, "message": "Criticità salvata su Neon PostgreSQL.", "id": row['id'] if row and 'id' in row else None}
+
+    @staticmethod
+    def _normalize(k):
+        if not k:
+            return ""
+        k = str(k).lower().strip()
+        k = re.sub(r'\(.*?\)', '', k)
+        k = re.sub(r'[^a-z0-9\s]', ' ', k)
+        return " ".join(k.split())
+
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        u = (username or '').replace("'", "''")
+        row = self._execute_sql(f"SELECT id, username, password_hash, role, created_at FROM users WHERE username = '{u}' LIMIT 1;", fetchone=True)
+        return dict(row) if row else None
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            row = self._execute_sql(f"SELECT id, username, password_hash, role, created_at FROM users WHERE id = {int(user_id)} LIMIT 1;", fetchone=True)
+            return dict(row) if row else None
+        except Exception:
+            return None
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        rows = self._execute_sql("SELECT id, username, role, created_at FROM users ORDER BY username;", fetchall=True) or []
+        return [dict(r) for r in rows]
+
+    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+        try:
+            u = (username or '').replace("'", "''")
+            p = (password_hash or '').replace("'", "''")
+            r = (role or 'user').replace("'", "''")
+            row = self._execute_sql(f"INSERT INTO users (username, password_hash, role) VALUES ('{u}', '{p}', '{r}') RETURNING id;", fetchone=True)
+            return {"success": True, "id": row['id'] if row and 'id' in row else None}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_user(self, user_id: int) -> Dict[str, Any]:
+        try:
+            self._execute_sql(f"DELETE FROM users WHERE id = {int(user_id)};")
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 class SupabaseAdapter(DatabaseAdapter):
@@ -333,14 +602,20 @@ class SupabaseAdapter(DatabaseAdapter):
 
 
 def get_adapter(backend: str = "local", **kwargs) -> DatabaseAdapter:
-    if backend == "supabase":
-        url = kwargs.get("supabase_url") or kwargs.get("url") or ""
-        key = kwargs.get("supabase_key") or kwargs.get("key") or ""
+    b = backend.lower()
+    if b in ["neon", "postgres", "postgresql"]:
+        url = kwargs.get("database_url") or kwargs.get("url") or os.environ.get("DATABASE_URL") or os.environ.get("NEON_DATABASE_URL", "")
+        if not url:
+            raise ValueError("DATABASE_URL / NEON_DATABASE_URL richiesto per backend='neon'")
+        return NeonAdapter(url)
+    elif b == "supabase":
+        url = kwargs.get("supabase_url") or kwargs.get("url") or os.environ.get("SUPABASE_URL", "")
+        key = kwargs.get("supabase_key") or kwargs.get("key") or os.environ.get("SUPABASE_KEY", "")
         if not url or not key:
             raise ValueError("Supabase URL e KEY richiesti per backend='supabase'")
         return SupabaseAdapter(url, key)
-    elif backend == "local":
+    elif b == "local":
         db_path = kwargs.get("db_path", "DATABASE.xlsx")
         return ExcelAdapter(db_path)
     else:
-        raise ValueError(f"Backend '{backend}' non supportato. Usa 'local' o 'supabase'.")
+        raise ValueError(f"Backend '{backend}' non supportato. Usa 'local', 'neon', o 'supabase'.")
