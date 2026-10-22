@@ -27,10 +27,10 @@
             
             <!-- Navigation Tabs -->
             <nav class="nav-tabs">
-                <button class="nav-tab" id="tab-home" data-target="home-section">
+                <button class="nav-tab active" id="tab-home" data-target="home-section">
                     <i class="fa-solid fa-house"></i> Home
                 </button>
-                <button class="nav-tab active" data-target="upload-section">
+                <button class="nav-tab" data-target="upload-section">
                     <i class="fa-solid fa-upload"></i> Carica PDF
                 </button>
                 <button class="nav-tab" data-target="interactive-checklist-section" id="tab-interactive">
@@ -47,10 +47,6 @@
             </nav>
 
             <div class="header-status">
-                <div class="status-badge server-badge">
-                    <span class="status-dot green"></span>
-                    <span>Offline Mode</span>
-                </div>
                 <div id="auth-area" class="auth-area hidden">
                     <span id="current-username" class="current-user"></span>
                     <button id="btn-admin" class="btn secondary-btn btn-sm hidden"><i class="fa-solid fa-user-gear"></i> Admin</button>
@@ -113,7 +109,7 @@
             </section>
 
             <!-- STEP 1: PDF Checklist Upload Screen -->
-            <section id="upload-section" class="content-card tab-content">
+            <section id="upload-section" class="content-card tab-content hidden">
                 <div class="card-header">
                     <h2>Carica la Checklist Compilata</h2>
                     <p>Trascina qui il file PDF della checklist compilata a penna o in digitale.<br>
@@ -186,7 +182,7 @@
             <section id="interactive-checklist-section" class="content-card hidden tab-content">
                 <div class="dashboard-header">
                     <div class="dashboard-title">
-                        <h2><i class="fa-solid fa-list-check"></i> Checklist Interattiva (Fedele al PDF Cartaceo)</h2>
+                        <h2><i class="fa-solid fa-list-check"></i> Checklist Interattiva</h2>
                         <p>La disposizione rispecchia esattamente il modello cartaceo a 2 colonne. Verifica o modifica i flag spuntati prima di generare la tabella finale.</p>
                     </div>
                     <div class="dashboard-actions">
@@ -318,8 +314,9 @@
                             <tr>
                                 <th style="width: 60px;">ID</th>
                                 <th>Utente</th>
+                                <th>Password</th>
                                 <th>Ruolo</th>
-                                <th style="width: 120px; text-align: center;">Azione</th>
+                                <th style="width: 140px; text-align: center;">Azione</th>
                             </tr>
                         </thead>
                         <tbody id="admin-users-body">

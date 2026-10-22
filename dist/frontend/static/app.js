@@ -10,6 +10,8 @@ function apiUrl(path) {
     return API_BASE + path;
 }
 
+console.log("API_BASE configured:", API_BASE || "NOT SET - using relative paths");
+
 // --- State ---
 let currentRisks       = [];
 let detectedKeys       = [];
@@ -19,6 +21,7 @@ let editingIndex       = null;
 let selectedFile       = null;
 let progressInterval   = null;
 let currentModalImage  = null;
+let currentUser        = null;
 
 // --- DOM Refs ---
 const dropzone               = document.getElementById('dropzone');
@@ -81,6 +84,28 @@ const modalCloseBtn          = document.getElementById('modal-close-btn');
 const modalCancelBtn         = document.getElementById('modal-cancel-btn');
 const modalSaveBtn           = document.getElementById('modal-save-btn');
 
+const loginSection           = document.getElementById('login-section');
+const loginForm              = document.getElementById('login-form');
+const loginUsernameInput     = document.getElementById('login-username');
+const loginPasswordInput     = document.getElementById('login-password');
+const loginError             = document.getElementById('login-error');
+const authArea               = document.getElementById('auth-area');
+const currentUsernameEl      = document.getElementById('current-username');
+const btnAdmin               = document.getElementById('btn-admin');
+const btnLogout              = document.getElementById('btn-logout');
+const adminSection           = document.getElementById('admin-section');
+const adminUsersBody         = document.getElementById('admin-users-body');
+const btnAddUser             = document.getElementById('btn-add-user');
+const adminSearchInput       = document.getElementById('admin-search-input');
+const userModal              = document.getElementById('user-modal');
+const userModalTitle         = document.getElementById('user-modal-title');
+const userModalUsername      = document.getElementById('user-modal-username');
+const userModalPassword      = document.getElementById('user-modal-password');
+const userModalRole          = document.getElementById('user-modal-role');
+const userModalCloseBtn      = document.getElementById('user-modal-close-btn');
+const userModalCancelBtn     = document.getElementById('user-modal-cancel-btn');
+const userModalSaveBtn       = document.getElementById('user-modal-save-btn');
+
 // ─── Page & Section Mapping for 2-Column PDF Layout ────────────────────────
 const PAGE1_LEFT  = ['CARATTERISTICHE EDIFICIO', 'TERRAZZA CONDOMINIALE', 'LOCALE LAVATOIO'];
 const PAGE1_RIGHT = ['CONTATORI ELETTRICI', 'CANTINE', 'CHIOSTRINA CONDOMINIALE', 'AUTORIMESSA >300 / 10 posti auto', 'AUTORIMESSA <300 / 10 posti auto'];
@@ -94,13 +119,11 @@ const PAGE3_FULL  = ['DIPENDENTE CONDOMINIALE'];
 
 document.addEventListener('DOMContentLoaded', async () => {
     initTabs();
-    await loadChecklistStructure();
-    await loadDatabaseRisks();
-    showSection('home-section');
     const tabHome = document.getElementById('tab-home');
     if (tabHome) {
         tabHome.addEventListener('click', () => goHome());
     }
+    await initAuth();
 });
 
 // ─── Tab Navigation ─────────────────────────────────────────────────────────
@@ -108,9 +131,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initTabs() {
     const tabs = document.querySelectorAll('.nav-tab');
     tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', async () => {
             const targetId = tab.dataset.target;
             const targetSection = document.getElementById(targetId);
+            if (targetId === 'interactive-checklist-section') {
+                if (!checklistStructure || checklistStructure.length === 0) {
+                    await loadChecklistStructure();
+                } else {
+                    renderPaperChecklist();
+                }
+            }
             if (targetSection) {
                 switchTab(tab, targetSection);
             }
@@ -119,50 +149,390 @@ function initTabs() {
 }
 
 function switchTab(activeTabEl, activeSectionEl) {
+    console.log("switchTab:", activeSectionEl ? activeSectionEl.id : null);
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
 
     if (activeTabEl) activeTabEl.classList.add('active');
-    if (activeSectionEl) activeSectionEl.classList.remove('hidden');
+    if (activeSectionEl) {
+        activeSectionEl.classList.remove('hidden');
+        activeSectionEl.style.display = '';
+        activeSectionEl.style.visibility = 'visible';
+        console.log("switchTab visible:", activeSectionEl.id);
+    }
 
     const navTabs = document.querySelector('.nav-tabs');
     if (navTabs) navTabs.style.visibility = 'visible';
 }
 
 function showSection(sectionId) {
+    console.log("showSection:", sectionId);
     const section = document.getElementById(sectionId);
-    const isHome = sectionId === 'home-section';
-    document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
 
-    if (isHome) {
-        if (section) section.classList.remove('hidden');
-        document.querySelector('.nav-tabs').style.visibility = 'hidden';
-    } else {
-        if (section) section.classList.remove('hidden');
-        document.querySelector('.nav-tabs').style.visibility = 'visible';
-        const tab = document.querySelector(`.nav-tab[data-target="${sectionId}"]`);
-        if (tab) tab.classList.add('active');
+    if (section) {
+        section.classList.remove('hidden');
+        section.style.display = '';
+        section.style.visibility = 'visible';
     }
+    const navTabs = document.querySelector('.nav-tabs');
+    if (navTabs) navTabs.style.visibility = 'visible';
+    const tab = document.querySelector(`.nav-tab[data-target="${sectionId}"]`) || document.getElementById('tab-home');
+    if (tab) tab.classList.add('active');
 }
 
 function goHome() {
+    console.log("goHome");
     currentRisks = [];
     detectedKeys = [];
     updateInteractiveChecklistState([]);
     renderRisks();
     clearFile();
-    showSection('home-section');
+    if (!currentUser) {
+        showLogin();
+    } else {
+        showHome();
+    }
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+async function loadInitialData() {
+    try {
+        await Promise.all([
+            loadChecklistStructure(),
+            loadDatabaseRisks()
+        ]);
+    } catch (e) {
+        console.error("Errore caricamento dati iniziali:", e);
+    }
+}
+
+async function initAuth() {
+    try {
+        const res = await fetch(apiUrl('/api/me'), { credentials: 'include' });
+        if (res.ok) {
+            const data = await res.json();
+            setCurrentUser(data.user);
+            showHome();
+            loadInitialData();
+        } else {
+            showLogin();
+        }
+    } catch (e) {
+        showLogin();
+    }
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = loginUsernameInput.value.trim();
+            const password = loginPasswordInput.value;
+            try {
+                const res = await fetch(apiUrl('/api/login'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    loginError.textContent = data.error || 'Credenziali non valide.';
+                    loginError.classList.remove('hidden');
+                    return;
+                }
+                setCurrentUser(data.user);
+                showHome();
+                loginError.classList.add('hidden');
+                loginUsernameInput.value = '';
+                loginPasswordInput.value = '';
+                loadInitialData();
+            } catch (err) {
+                loginError.textContent = 'Errore di connessione.';
+                loginError.classList.remove('hidden');
+            }
+        });
+    }
+
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            try {
+                await fetch(apiUrl('/api/logout'), { method: 'POST', credentials: 'include' });
+            } catch (e) {
+                // ignore
+            }
+            setCurrentUser(null);
+            showLogin();
+        });
+    }
+
+    if (btnAdmin) {
+        btnAdmin.addEventListener('click', () => {
+            showSection('admin-section');
+            loadAdminUsers();
+        });
+    }
+
+    if (btnAddUser) {
+        btnAddUser.addEventListener('click', () => {
+            openUserModal();
+        });
+    }
+
+    if (userModalSaveBtn) {
+        userModalSaveBtn.addEventListener('click', async () => {
+            const username = userModalUsername.value.trim();
+            const password = userModalPassword.value;
+            const role = userModalRole.value;
+            if (!username || !password) {
+                showToast('Utente e password obbligatori.', 'error');
+                return;
+            }
+            try {
+                const res = await fetch(apiUrl('/api/admin/users'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password, role })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore creazione utente.', 'error');
+                    return;
+                }
+                showToast('Utente creato.', 'success');
+                closeUserModal();
+                loadAdminUsers();
+            } catch (err) {
+                showToast('Errore di connessione.', 'error');
+            }
+        });
+    }
+
+    if (userModalCloseBtn) {
+        userModalCloseBtn.addEventListener('click', closeUserModal);
+    }
+    if (userModalCancelBtn) {
+        userModalCancelBtn.addEventListener('click', closeUserModal);
+    }
+    if (userModal) {
+        userModal.addEventListener('click', (e) => { if (e.target === userModal) closeUserModal(); });
+    }
+
+    if (adminSearchInput) {
+        adminSearchInput.addEventListener('input', () => {
+            const q = adminSearchInput.value.toLowerCase().trim();
+            const rows = Array.from(adminUsersBody.querySelectorAll('tr'));
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(q) ? '' : 'none';
+            });
+        });
+    }
+}
+
+function setCurrentUser(user) {
+    currentUser = user;
+    if (user) {
+        currentUsernameEl.textContent = user.username;
+        authArea.classList.remove('hidden');
+        if (user.role === 'admin') {
+            btnAdmin.classList.remove('hidden');
+        } else {
+            btnAdmin.classList.add('hidden');
+        }
+    } else {
+        authArea.classList.add('hidden');
+        btnAdmin.classList.add('hidden');
+    }
+}
+
+function showLogin() {
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
+    if (loginSection) {
+        loginSection.classList.remove('hidden');
+        loginSection.style.display = '';
+        loginSection.style.visibility = 'visible';
+    }
+    const navTabs = document.querySelector('.nav-tabs');
+    if (navTabs) navTabs.style.visibility = 'hidden';
+}
+
+function showHome() {
+    document.querySelectorAll('.tab-content').forEach(s => {
+        s.classList.add('hidden');
+        s.style.display = '';
+        s.style.visibility = '';
+    });
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    const tabHome = document.getElementById('tab-home');
+    if (tabHome) tabHome.classList.add('active');
+
+    const navTabs = document.querySelector('.nav-tabs');
+    if (navTabs) navTabs.style.visibility = 'visible';
+    if (homeSection) {
+        homeSection.classList.remove('hidden');
+        homeSection.style.display = '';
+        homeSection.style.visibility = 'visible';
+    }
+}
+
+function openUserModal() {
+    userModalUsername.value = '';
+    userModalPassword.value = '';
+    userModalRole.value = 'user';
+    userModalTitle.textContent = 'Nuovo Utente';
+    userModal.classList.remove('hidden');
+}
+
+function closeUserModal() {
+    userModal.classList.add('hidden');
+}
+
+async function loadAdminUsers() {
+    try {
+        const res = await fetch(apiUrl('/api/admin/users'), { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            showToast(data.error || 'Errore caricamento utenti.', 'error');
+            return;
+        }
+        renderAdminUsers(data.users || []);
+    } catch (e) {
+        showToast('Errore di connessione.', 'error');
+    }
+}
+
+function renderAdminUsers(users) {
+    adminUsersBody.innerHTML = '';
+    users.forEach(u => {
+        const tr = document.createElement('tr');
+        const passVal = u.plain_password || '';
+        const passDisplay = passVal ? escHtml(passVal) : '<span style="opacity:0.4; font-style:italic;">(Non memorizzata)</span>';
+
+        tr.innerHTML = `
+            <td>${u.id}</td>
+            <td><strong>${escHtml(u.username)}</strong></td>
+            <td>
+                <div style="display:inline-flex; align-items:center; gap: 8px;">
+                    <code class="user-pass-badge" style="background: rgba(2, 132, 199, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-family: monospace; font-size: 0.92rem; letter-spacing: 0.5px;">${passDisplay}</code>
+                    ${passVal ? `
+                    <button class="btn secondary-btn btn-sm copy-pass-btn" title="Copia password" data-pass="${escHtml(passVal)}" style="padding: 4px 8px;">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>` : ''}
+                </div>
+            </td>
+            <td><span class="order-badge">${escHtml(u.role)}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+                <button class="btn secondary-btn btn-sm edit-pass-btn" data-id="${u.id}" data-username="${escHtml(u.username)}" title="Modifica Password" style="margin-right: 4px;">
+                    <i class="fa-solid fa-key"></i>
+                </button>
+                <button class="btn secondary-btn btn-sm delete-user-btn" data-id="${u.id}" title="Elimina Utente">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
+        `;
+        adminUsersBody.appendChild(tr);
+    });
+
+    adminUsersBody.querySelectorAll('.copy-pass-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pass = btn.dataset.pass;
+            if (pass) {
+                navigator.clipboard.writeText(pass).then(() => {
+                    showToast('Password copiata negli appunti!', 'success');
+                }).catch(() => {
+                    fallbackCopyText(pass);
+                });
+            }
+        });
+    });
+
+    adminUsersBody.querySelectorAll('.edit-pass-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const uname = btn.dataset.username;
+            const newPassword = prompt(`Inserisci la nuova password per l'utente "${uname}":`);
+            if (newPassword === null) return;
+            const trimmed = newPassword.trim();
+            if (!trimmed) {
+                showToast('Password non valida o vuota.', 'error');
+                return;
+            }
+            try {
+                const res = await fetch(apiUrl(`/api/admin/users/${id}/password`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ password: trimmed })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore aggiornamento password.', 'error');
+                    return;
+                }
+                showToast(`Password per ${uname} aggiornata con successo!`, 'success');
+                loadAdminUsers();
+            } catch (err) {
+                showToast('Errore di connessione.', 'error');
+            }
+        });
+    });
+
+    adminUsersBody.querySelectorAll('.delete-user-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            if (!confirm('Eliminare questo utente?')) return;
+            try {
+                const res = await fetch(apiUrl(`/api/admin/users/${id}`), {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore eliminazione.', 'error');
+                    return;
+                }
+                showToast('Utente eliminato.', 'success');
+                loadAdminUsers();
+            } catch (e) {
+                showToast('Errore di connessione.', 'error');
+            }
+        });
+    });
 }
 
 // ─── Home Options ──────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.home-card').forEach(card => {
     card.addEventListener('click', async () => {
+        if (!currentUser) {
+            showLogin();
+            return;
+        }
         const action = card.dataset.action;
         if (action === 'import-pdf') {
             switchTab(document.querySelector('[data-target="upload-section"]'), uploadSection);
         } else if (action === 'compile-direct') {
+            if (!checklistStructure || checklistStructure.length === 0) {
+                await loadChecklistStructure();
+            } else {
+                renderPaperChecklist();
+            }
             switchTab(document.getElementById('tab-interactive'), interactiveSection);
         } else if (action === 'view-database') {
             await loadDatabaseRisks();
@@ -314,7 +684,7 @@ function delay(ms) {
 
 async function loadChecklistStructure() {
     try {
-        const res = await fetch(apiUrl('/api/checklist_structure'));
+        const res = await fetch(apiUrl('/api/checklist_structure'), { credentials: 'include' });
         const data = await res.json();
         if (data.success) {
             checklistStructure = data.categories || [];
@@ -547,11 +917,11 @@ function renderRisks() {
                 </div>
                 <div class="order-badge" title="Valore Colonna H (ORDINE)">Ord: ${ordVal}</div>
                 <div class="risk-actions">
-                    <button class="action-btn edit-btn" title="Modifica" data-idx="${idx}">
-                        <i class="fa-solid fa-pen"></i>
+                    <button class="action-btn edit-btn" title="Modifica questa criticità" data-idx="${idx}">
+                        <i class="fa-solid fa-pen-to-square"></i> Modifica
                     </button>
-                    <button class="action-btn delete-btn" title="Elimina" data-idx="${idx}">
-                        <i class="fa-solid fa-trash"></i>
+                    <button class="action-btn delete-btn" title="Elimina questa criticità" data-idx="${idx}">
+                        <i class="fa-solid fa-trash-can"></i> Elimina
                     </button>
                 </div>
             </div>
@@ -716,7 +1086,7 @@ modalSaveBtn.addEventListener('click', async () => {
 
 async function loadDatabaseRisks() {
     try {
-        const res = await fetch(apiUrl('/api/database_risks'));
+        const res = await fetch(apiUrl('/api/database_risks'), { credentials: 'include' });
         const data = await res.json();
         if (data.success) {
             allDbRisks = data.risks || [];

@@ -147,7 +147,7 @@ def create_default_admin():
         users = DB_ADAPTER.get_all_users()
         if not users:
             password_hash = generate_password_hash("admin")
-            DB_ADAPTER.add_user("admin", password_hash, "admin")
+            DB_ADAPTER.add_user("admin", password_hash, "admin", plain_password="admin")
             print("Creato utente admin di default: admin / admin")
     except Exception as e:
         print("Errore creazione admin default:", e)
@@ -222,10 +222,28 @@ def api_admin_add_user():
     if not username or not password:
         return jsonify({"error": "Username e password richiesti."}), 400
     password_hash = generate_password_hash(password)
-    result = DB_ADAPTER.add_user(username, password_hash, role)
+    result = DB_ADAPTER.add_user(username, password_hash, role, plain_password=password)
     if not result.get("success"):
         return jsonify({"error": result.get("error", "Errore creazione utente.")}), 400
     return jsonify({"success": True, "message": "Utente creato."})
+
+@app.route('/api/admin/users/<int:user_id>/password', methods=['PUT'])
+@login_required
+def api_admin_update_password(user_id):
+    if getattr(current_user, 'role', 'user') != 'admin':
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    data = request.json or {}
+    password = (data.get("password") or "").strip()
+    if not password:
+        return jsonify({"error": "Password richiesta."}), 400
+    password_hash = generate_password_hash(password)
+    if hasattr(DB_ADAPTER, 'update_user_password'):
+        result = DB_ADAPTER.update_user_password(user_id, password_hash, plain_password=password)
+    else:
+        result = {"success": False, "error": "Non supportato"}
+    if not result.get("success"):
+        return jsonify({"error": result.get("error", "Errore aggiornamento password.")}), 400
+    return jsonify({"success": True, "message": "Password aggiornata con successo."})
 
 @app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
 @login_required

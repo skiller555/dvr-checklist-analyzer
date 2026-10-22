@@ -27,10 +27,10 @@
             
             <!-- Navigation Tabs -->
             <nav class="nav-tabs">
-                <button class="nav-tab" id="tab-home" data-target="home-section">
+                <button class="nav-tab active" id="tab-home" data-target="home-section">
                     <i class="fa-solid fa-house"></i> Home
                 </button>
-                <button class="nav-tab active" data-target="upload-section">
+                <button class="nav-tab" data-target="upload-section">
                     <i class="fa-solid fa-upload"></i> Carica PDF
                 </button>
                 <button class="nav-tab" data-target="interactive-checklist-section" id="tab-interactive">
@@ -47,15 +47,41 @@
             </nav>
 
             <div class="header-status">
-                <div class="status-badge server-badge">
-                    <span class="status-dot green"></span>
-                    <span>Offline Mode</span>
+                <div id="auth-area" class="auth-area hidden">
+                    <span id="current-username" class="current-user"></span>
+                    <button id="btn-admin" class="btn secondary-btn btn-sm hidden"><i class="fa-solid fa-user-gear"></i> Admin</button>
+                    <button id="btn-logout" class="btn secondary-btn btn-sm"><i class="fa-solid fa-right-from-bracket"></i> Esci</button>
                 </div>
             </div>
         </header>
 
         <!-- Main Content Area -->
         <main class="main-content">
+
+            <!-- LOGIN -->
+            <section id="login-section" class="content-card tab-content">
+                <div class="login-container">
+                    <div class="login-logo">
+                        <i class="fa-solid fa-clipboard-check icon-logo"></i>
+                        <h1>DVR Checklist</h1>
+                        <p>Accedi per continuare</p>
+                    </div>
+                    <form id="login-form" class="login-form">
+                        <div class="form-group">
+                            <label for="login-username">Utente</label>
+                            <input type="text" id="login-username" placeholder="Inserisci utente" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Password</label>
+                            <input type="password" id="login-password" placeholder="Inserisci password" required>
+                        </div>
+                        <button type="submit" class="btn primary-btn large-btn full-width">
+                            <i class="fa-solid fa-right-to-bracket"></i> Accedi
+                        </button>
+                        <p id="login-error" class="login-error hidden"></p>
+                    </form>
+                </div>
+            </section>
 
             <!-- HOME: Scelta modalità -->
             <section id="home-section" class="content-card tab-content">
@@ -83,7 +109,7 @@
             </section>
 
             <!-- STEP 1: PDF Checklist Upload Screen -->
-            <section id="upload-section" class="content-card tab-content">
+            <section id="upload-section" class="content-card tab-content hidden">
                 <div class="card-header">
                     <h2>Carica la Checklist Compilata</h2>
                     <p>Trascina qui il file PDF della checklist compilata a penna o in digitale.<br>
@@ -156,7 +182,7 @@
             <section id="interactive-checklist-section" class="content-card hidden tab-content">
                 <div class="dashboard-header">
                     <div class="dashboard-title">
-                        <h2><i class="fa-solid fa-list-check"></i> Checklist Interattiva (Fedele al PDF Cartaceo)</h2>
+                        <h2><i class="fa-solid fa-list-check"></i> Checklist Interattiva</h2>
                         <p>La disposizione rispecchia esattamente il modello cartaceo a 2 colonne. Verifica o modifica i flag spuntati prima di generare la tabella finale.</p>
                     </div>
                     <div class="dashboard-actions">
@@ -267,6 +293,39 @@
                 </div>
             </section>
 
+            <!-- ADMIN: Gestione utenti -->
+            <section id="admin-section" class="content-card hidden tab-content">
+                <div class="dashboard-header">
+                    <div class="dashboard-title">
+                        <h2><i class="fa-solid fa-user-gear"></i> Gestione Utenti</h2>
+                        <p>Crea e gestisci gli account che possono accedere all'applicazione.</p>
+                    </div>
+                </div>
+                <div class="db-search-bar">
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="admin-search-input" placeholder="Cerca utente...">
+                    </div>
+                    <button id="btn-add-user" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Nuovo Utente</button>
+                </div>
+                <div class="db-table-wrapper">
+                    <table class="db-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th>Utente</th>
+                                <th>Password</th>
+                                <th>Ruolo</th>
+                                <th style="width: 140px; text-align: center;">Azione</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -314,6 +373,39 @@
         </div>
     </div>
 
+    <!-- Admin User Modal -->
+    <div id="user-modal" class="modal hidden">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h3 id="user-modal-title">Nuovo Utente</h3>
+                <button id="user-modal-close-btn" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="user-modal-username">Utente</label>
+                    <input type="text" id="user-modal-username" placeholder="Nome utente">
+                </div>
+                <div class="form-group">
+                    <label for="user-modal-password">Password</label>
+                    <input type="text" id="user-modal-password" placeholder="Password">
+                </div>
+                <div class="form-group">
+                    <label for="user-modal-role">Ruolo</label>
+                    <select id="user-modal-role">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="user-modal-cancel-btn" class="btn secondary-btn">Annulla</button>
+                <button id="user-modal-save-btn" class="btn primary-btn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/env-config.js"></script>
+    <script src="/static/env-config.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>

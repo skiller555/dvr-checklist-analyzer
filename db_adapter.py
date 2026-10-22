@@ -42,12 +42,15 @@ class DatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+    def add_user(self, username: str, password_hash: str, role: str = 'user', plain_password: str = '') -> Dict[str, Any]:
         pass
 
     @abstractmethod
     def delete_user(self, user_id: int) -> Dict[str, Any]:
         pass
+
+    def update_user_password(self, user_id: int, password_hash: str, plain_password: str = '') -> Dict[str, Any]:
+        return {"success": False, "error": "Non implementato"}
 
 
 class ExcelAdapter(DatabaseAdapter):
@@ -250,9 +253,13 @@ class ExcelAdapter(DatabaseAdapter):
         return None
 
     def get_all_users(self) -> List[Dict[str, Any]]:
-        return self._read_users()
+        users = self._read_users()
+        for u in users:
+            if 'plain_password' not in u:
+                u['plain_password'] = 'admin' if u.get('username') == 'admin' else ''
+        return users
 
-    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+    def add_user(self, username: str, password_hash: str, role: str = 'user', plain_password: str = '') -> Dict[str, Any]:
         users = self._read_users()
         if any(u.get('username') == username for u in users):
             return {"success": False, "error": "Username già esistente"}
@@ -261,11 +268,22 @@ class ExcelAdapter(DatabaseAdapter):
             "id": new_id,
             "username": username,
             "password_hash": password_hash,
-            "role": role
+            "role": role,
+            "plain_password": plain_password
         }
         users.append(new_user)
         self._write_users(users)
         return {"success": True, "id": new_id}
+
+    def update_user_password(self, user_id: int, password_hash: str, plain_password: str = '') -> Dict[str, Any]:
+        users = self._read_users()
+        for u in users:
+            if str(u.get('id')) == str(user_id):
+                u['password_hash'] = password_hash
+                u['plain_password'] = plain_password
+                self._write_users(users)
+                return {"success": True}
+        return {"success": False, "error": "Utente non trovato"}
 
     def delete_user(self, user_id: int) -> Dict[str, Any]:
         users = self._read_users()
@@ -341,8 +359,10 @@ class NeonAdapter(DatabaseAdapter):
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 role TEXT DEFAULT 'user',
+                plain_password TEXT DEFAULT '',
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );""",
+            """ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT DEFAULT '';""",
             """CREATE TABLE IF NOT EXISTS checklist_items (
                 id BIGSERIAL PRIMARY KEY,
                 category TEXT NOT NULL DEFAULT 'GENERALE',
@@ -462,16 +482,26 @@ class NeonAdapter(DatabaseAdapter):
             return None
 
     def get_all_users(self) -> List[Dict[str, Any]]:
-        rows = self._execute_sql("SELECT id, username, role, created_at FROM users ORDER BY username;", fetchall=True) or []
+        rows = self._execute_sql("SELECT id, username, role, plain_password, created_at FROM users ORDER BY username;", fetchall=True) or []
         return [dict(r) for r in rows]
 
-    def add_user(self, username: str, password_hash: str, role: str = 'user') -> Dict[str, Any]:
+    def add_user(self, username: str, password_hash: str, role: str = 'user', plain_password: str = '') -> Dict[str, Any]:
         try:
             u = (username or '').replace("'", "''")
             p = (password_hash or '').replace("'", "''")
             r = (role or 'user').replace("'", "''")
-            row = self._execute_sql(f"INSERT INTO users (username, password_hash, role) VALUES ('{u}', '{p}', '{r}') RETURNING id;", fetchone=True)
+            pw = (plain_password or '').replace("'", "''")
+            row = self._execute_sql(f"INSERT INTO users (username, password_hash, role, plain_password) VALUES ('{u}', '{p}', '{r}', '{pw}') RETURNING id;", fetchone=True)
             return {"success": True, "id": row['id'] if row and 'id' in row else None}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def update_user_password(self, user_id: int, password_hash: str, plain_password: str = '') -> Dict[str, Any]:
+        try:
+            p = (password_hash or '').replace("'", "''")
+            pw = (plain_password or '').replace("'", "''")
+            self._execute_sql(f"UPDATE users SET password_hash = '{p}', plain_password = '{pw}' WHERE id = {int(user_id)};")
+            return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
