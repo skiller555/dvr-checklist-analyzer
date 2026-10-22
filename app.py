@@ -257,6 +257,72 @@ def api_admin_delete_user(user_id):
         return jsonify({"error": result.get("error", "Errore eliminazione.")}), 400
     return jsonify({"success": True})
 
+@app.route('/api/admin/mappings', methods=['GET'])
+@login_required
+def api_admin_get_mappings():
+    role = getattr(current_user, 'role', 'user')
+    if role not in ('admin', 'supervisor'):
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    try:
+        mappings = DB_ADAPTER.get_mappings() if hasattr(DB_ADAPTER, 'get_mappings') else []
+        checklist_items = DB_ADAPTER.get_checklist_items() if hasattr(DB_ADAPTER, 'get_checklist_items') else []
+        dvr_risks = DB_ADAPTER.get_all_dvr_risks() if hasattr(DB_ADAPTER, 'get_all_dvr_risks') else []
+        checkbox_items = [it for it in checklist_items if it.get('is_checkbox', True)]
+        light_risks = [
+            {
+                "id": r.get("id"),
+                "luogo": r.get("luogo", ""),
+                "rischio": r.get("rischio", ""),
+                "ordine": r.get("ordine", 999999),
+                "image": bool(r.get("image"))
+            }
+            for r in dvr_risks
+        ]
+        return jsonify({
+            "success": True,
+            "mappings": mappings,
+            "checklist_items": checkbox_items,
+            "risks": light_risks
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/mappings', methods=['POST'])
+@login_required
+def api_admin_add_mapping():
+    role = getattr(current_user, 'role', 'user')
+    if role not in ('admin', 'supervisor'):
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    data = request.json or {}
+    checklist_key = (data.get("checklist_key") or "").strip()
+    dvr_risk_id = data.get("dvr_risk_id")
+    if not checklist_key or not dvr_risk_id:
+        return jsonify({"error": "checklist_key e dvr_risk_id richiesti."}), 400
+    if hasattr(DB_ADAPTER, 'add_mapping'):
+        res = DB_ADAPTER.add_mapping(checklist_key, dvr_risk_id)
+        if res.get("success"):
+            return jsonify({"success": True, "message": "Associazione aggiunta."})
+        return jsonify({"error": res.get("error", "Errore inserimento.")}), 400
+    return jsonify({"error": "Non supportato"}), 400
+
+@app.route('/api/admin/mappings', methods=['DELETE'])
+@login_required
+def api_admin_delete_mapping():
+    role = getattr(current_user, 'role', 'user')
+    if role not in ('admin', 'supervisor'):
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    data = request.json or {}
+    checklist_key = (data.get("checklist_key") or "").strip()
+    dvr_risk_id = data.get("dvr_risk_id")
+    if not checklist_key or not dvr_risk_id:
+        return jsonify({"error": "checklist_key e dvr_risk_id richiesti."}), 400
+    if hasattr(DB_ADAPTER, 'delete_mapping'):
+        res = DB_ADAPTER.delete_mapping(checklist_key, dvr_risk_id)
+        if res.get("success"):
+            return jsonify({"success": True, "message": "Associazione rimossa."})
+        return jsonify({"error": res.get("error", "Errore rimozione.")}), 400
+    return jsonify({"error": "Non supportato"}), 400
+
 # ─── Database helpers (compatibilità) ─────────────────────────────────────────
 
 def normalize_key(k):

@@ -55,6 +55,15 @@ class DatabaseAdapter(ABC):
     def update_dvr_risk(self, risk_id: Any, risk_data: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "Non implementato"}
 
+    def get_mappings(self) -> List[Dict[str, Any]]:
+        return []
+
+    def add_mapping(self, checklist_key: str, dvr_risk_id: Any) -> Dict[str, Any]:
+        return {"success": False, "error": "Non implementato"}
+
+    def delete_mapping(self, checklist_key: str, dvr_risk_id: Any) -> Dict[str, Any]:
+        return {"success": False, "error": "Non implementato"}
+
 
 class ExcelAdapter(DatabaseAdapter):
     def __init__(self, db_path: str):
@@ -295,6 +304,38 @@ class ExcelAdapter(DatabaseAdapter):
         self._write_users(users)
         return {"success": True}
 
+    def _read_mappings(self) -> List[Dict[str, Any]]:
+        mappings_path = os.path.join(os.path.dirname(self._users_path), "mappings.json")
+        if not os.path.exists(mappings_path):
+            return []
+        try:
+            with open(mappings_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _write_mappings(self, mappings: List[Dict[str, Any]]):
+        mappings_path = os.path.join(os.path.dirname(self._users_path), "mappings.json")
+        os.makedirs(os.path.dirname(mappings_path), exist_ok=True)
+        with open(mappings_path, "w", encoding="utf-8") as f:
+            json.dump(mappings, f, indent=2, ensure_ascii=False)
+
+    def get_mappings(self) -> List[Dict[str, Any]]:
+        return self._read_mappings()
+
+    def add_mapping(self, checklist_key: str, dvr_risk_id: Any) -> Dict[str, Any]:
+        mappings = self._read_mappings()
+        if not any(m.get('checklist_key') == checklist_key and str(m.get('dvr_risk_id')) == str(dvr_risk_id) for m in mappings):
+            mappings.append({"checklist_key": checklist_key, "dvr_risk_id": dvr_risk_id})
+            self._write_mappings(mappings)
+        return {"success": True}
+
+    def delete_mapping(self, checklist_key: str, dvr_risk_id: Any) -> Dict[str, Any]:
+        mappings = self._read_mappings()
+        mappings = [m for m in mappings if not (m.get('checklist_key') == checklist_key and str(m.get('dvr_risk_id')) == str(dvr_risk_id))]
+        self._write_mappings(mappings)
+        return {"success": True}
+
     @staticmethod
     def _normalize(k):
         if not k:
@@ -388,7 +429,15 @@ class NeonAdapter(DatabaseAdapter):
                 is_falso BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 updated_at TIMESTAMPTZ DEFAULT NOW()
-            );"""
+            );""",
+            """CREATE TABLE IF NOT EXISTS checklist_risk_mappings (
+                id BIGSERIAL PRIMARY KEY,
+                checklist_key TEXT NOT NULL,
+                dvr_risk_id BIGINT NOT NULL REFERENCES dvr_risks(id) ON DELETE CASCADE,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(checklist_key, dvr_risk_id)
+            );""",
+            """CREATE INDEX IF NOT EXISTS idx_crm_checklist_key ON checklist_risk_mappings(checklist_key);"""
         ]
         for stmt in statements:
             try:
@@ -447,25 +496,99 @@ class NeonAdapter(DatabaseAdapter):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def get_mappings(self) -> List[Dict[str, Any]]:
+        sql = """
+            SELECT m.id as mapping_id, m.checklist_key, m.dvr_risk_id,
+                   r.luogo, r.rischio, r.azione, r.entro, r.ordine, r.image_url
+            FROM checklist_risk_mappings m
+            JOIN dvr_risks r ON m.dvr_risk_id = r.id
+            ORDER BY m.checklist_key, r.ordine, r.id;
+        """
+        rows = self._execute_sql(sql, fetchall=True) or []
+        return [dict(r) for r in rows]
+
+    def add_mapping(self, checklist_key: str, dvr_risk_id: Any) -> Dict[str, Any]:
+        try:
+            k = (checklist_key or '').replace("'", "''")
+            rid = int(dvr_risk_id)
+            sql = f"""
+                INSERT INTO checklist_risk_mappings (checklist_key, dvr_risk_id)
+                VALUES ('{k}', {rid})
+                ON CONFLICT (checklist_key, dvr_risk_id) DO NOTHING;
+            """
+            self._execute_sql(sql)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_mapping(self, checklist_key: str, dvr_risk_id: Any) -> Dict[str, Any]:
+        try:
+            k = (checklist_key or '').replace("'", "''")
+            rid = int(dvr_risk_id)
+            sql = f"""
+                DELETE FROM checklist_risk_mappings
+                WHERE checklist_key = '{k}' AND dvr_risk_id = {rid};
+            """
+            self._execute_sql(sql)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def match_risks(self, checked_keys: List[str]) -> List[Dict[str, Any]]:
-        risks = self.get_all_dvr_risks()
-        matched = []
-        used = set()
-        norm_ck = [self._normalize(k) for k in checked_keys]
-        for i, ck in enumerate(checked_keys):
-            n = norm_ck[i]
-            if not n:
-                continue
-            for j, r in enumerate(risks):
-                if j in used:
+        if not checked_keys:
+            return []
+
+        matched_risks = []
+        mapped_keys = set()
+        used_risk_ids = set()
+
+        # 1. Recupero da mappature esplicite (priorità assoluta)
+        valid_keys = [k for k in checked_keys if k]
+        if valid_keys:
+            keys_escaped = ", ".join(f"'{k.replace("'", "''")}'" for k in valid_keys)
+            sql = f"""
+                SELECT m.checklist_key, r.id, r.luogo, r.rischio, r.azione, r.entro, r.key, r.ordine, r.image_url
+                FROM checklist_risk_mappings m
+                JOIN dvr_risks r ON m.dvr_risk_id = r.id
+                WHERE m.checklist_key IN ({keys_escaped})
+                ORDER BY r.ordine, r.id;
+            """
+            rows = self._execute_sql(sql, fetchall=True) or []
+            for r in rows:
+                mapped_keys.add(r['checklist_key'])
+                if r['id'] not in used_risk_ids:
+                    used_risk_ids.add(r['id'])
+                    matched_risks.append({
+                        'id': r['id'],
+                        'luogo': r['luogo'] or '',
+                        'rischio': r['rischio'] or '',
+                        'azione': r['azione'] or '',
+                        'entro': r['entro'] or '',
+                        'key': r['checklist_key'],
+                        'ordine': r['ordine'] if r['ordine'] is not None else 999999,
+                        'image': r['image_url'] or ''
+                    })
+
+        # 2. Per le voci senza mappatura esplicita, fallback su matching fuzzy
+        remaining_keys = [k for k in valid_keys if k not in mapped_keys]
+        if remaining_keys:
+            all_risks = self.get_all_dvr_risks()
+            norm_ck = [self._normalize(k) for k in remaining_keys]
+            for i, ck in enumerate(remaining_keys):
+                n = norm_ck[i]
+                if not n:
                     continue
-                nr = self._normalize(r['key'])
-                if nr == n or n in nr or nr in n:
-                    matched.append({**r, 'key': ck})
-                    used.add(j)
-                    break
-        matched.sort(key=lambda x: x.get('ordine', 999999))
-        return matched
+                for j, r in enumerate(all_risks):
+                    if r.get('id') in used_risk_ids:
+                        continue
+                    nr = self._normalize(r['key'])
+                    if nr == n or n in nr or nr in n:
+                        matched_risks.append({**r, 'key': ck})
+                        used_risk_ids.add(r.get('id'))
+                        break
+
+        matched_risks.sort(key=lambda x: x.get('ordine', 999999))
+        return matched_risks
 
     def add_database_risk(self, risk: Dict[str, Any]) -> Dict[str, Any]:
         ord_val = risk.get('ordine', 999999)

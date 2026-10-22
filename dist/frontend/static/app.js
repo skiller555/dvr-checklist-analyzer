@@ -107,6 +107,21 @@ const userModalCloseBtn      = document.getElementById('user-modal-close-btn');
 const userModalCancelBtn     = document.getElementById('user-modal-cancel-btn');
 const userModalSaveBtn       = document.getElementById('user-modal-save-btn');
 
+const adminSubtabUsers        = document.getElementById('admin-subtab-users');
+const adminSubtabMappings     = document.getElementById('admin-subtab-mappings');
+const adminUsersView          = document.getElementById('admin-users-view');
+const adminMappingsView       = document.getElementById('admin-mappings-view');
+const mappingsSearchInput     = document.getElementById('mappings-search-input');
+const mappingsCategoryFilter  = document.getElementById('mappings-category-filter');
+const mappingsTableBody       = document.getElementById('mappings-table-body');
+const mappingModal            = document.getElementById('mapping-modal');
+const mappingModalCloseBtn    = document.getElementById('mapping-modal-close-btn');
+const mappingModalCancelBtn   = document.getElementById('mapping-modal-cancel-btn');
+const mappingModalSaveBtn     = document.getElementById('mapping-modal-save-btn');
+const mappingModalSelectedText = document.getElementById('mapping-modal-selected-text');
+const mappingRiskSearch       = document.getElementById('mapping-risk-search');
+const mappingRisksPickerList  = document.getElementById('mapping-risks-picker-list');
+
 // ─── Page & Section Mapping for 2-Column PDF Layout ────────────────────────
 const PAGE1_LEFT  = ['CARATTERISTICHE EDIFICIO', 'TERRAZZA CONDOMINIALE', 'LOCALE LAVATOIO'];
 const PAGE1_RIGHT = ['CONTATORI ELETTRICI', 'CANTINE', 'CHIOSTRINA CONDOMINIALE', 'AUTORIMESSA >300 / 10 posti auto', 'AUTORIMESSA <300 / 10 posti auto'];
@@ -120,6 +135,7 @@ const PAGE3_FULL  = ['DIPENDENTE CONDOMINIALE'];
 
 document.addEventListener('DOMContentLoaded', async () => {
     initTabs();
+    initAdminSubtabs();
     const tabHome = document.getElementById('tab-home');
     if (tabHome) {
         tabHome.addEventListener('click', () => goHome());
@@ -291,7 +307,7 @@ async function initAuth() {
     if (btnAdmin) {
         btnAdmin.addEventListener('click', () => {
             showSection('admin-section');
-            loadAdminUsers();
+            switchAdminSubtab('users');
         });
     }
 
@@ -528,6 +544,303 @@ function renderAdminUsers(users) {
         });
     });
 }
+
+// ─── Admin Checklist - Risk Mappings Logic ────────────────────────────────────
+
+let allAdminChecklistItems = [];
+let allAdminMappings = [];
+let allAdminRisks = [];
+let currentPickerChecklistKey = null;
+let selectedRiskIdForMapping = null;
+
+function initAdminSubtabs() {
+    if (adminSubtabUsers) {
+        adminSubtabUsers.addEventListener('click', () => switchAdminSubtab('users'));
+    }
+    if (adminSubtabMappings) {
+        adminSubtabMappings.addEventListener('click', () => switchAdminSubtab('mappings'));
+    }
+
+    if (mappingsSearchInput) {
+        mappingsSearchInput.addEventListener('input', () => renderAdminMappings());
+    }
+    if (mappingsCategoryFilter) {
+        mappingsCategoryFilter.addEventListener('change', () => renderAdminMappings());
+    }
+
+    if (mappingModalCloseBtn) {
+        mappingModalCloseBtn.addEventListener('click', closeMappingModal);
+    }
+    if (mappingModalCancelBtn) {
+        mappingModalCancelBtn.addEventListener('click', closeMappingModal);
+    }
+    if (mappingModal) {
+        mappingModal.addEventListener('click', (e) => {
+            if (e.target === mappingModal) closeMappingModal();
+        });
+    }
+
+    if (mappingRiskSearch) {
+        mappingRiskSearch.addEventListener('input', () => {
+            renderPickerRisks(mappingRiskSearch.value.trim().toLowerCase());
+        });
+    }
+
+    if (mappingModalSaveBtn) {
+        mappingModalSaveBtn.addEventListener('click', async () => {
+            if (!currentPickerChecklistKey) {
+                showToast('Nessuna voce selezionata.', 'error');
+                return;
+            }
+            if (!selectedRiskIdForMapping) {
+                showToast('Seleziona una criticità dalla lista.', 'error');
+                return;
+            }
+            try {
+                const res = await fetch(apiUrl('/api/admin/mappings'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        checklist_key: currentPickerChecklistKey,
+                        dvr_risk_id: selectedRiskIdForMapping
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore associazione.', 'error');
+                    return;
+                }
+                showToast('Criticità associata con successo!', 'success');
+                closeMappingModal();
+                await loadAdminMappings();
+            } catch (err) {
+                showToast('Errore di connessione: ' + err.message, 'error');
+            }
+        });
+    }
+}
+
+function switchAdminSubtab(subtab) {
+    if (!adminSubtabUsers || !adminSubtabMappings) return;
+    if (subtab === 'users') {
+        adminSubtabUsers.className = 'btn primary-btn btn-sm';
+        adminSubtabMappings.className = 'btn secondary-btn btn-sm';
+        if (adminUsersView) adminUsersView.classList.remove('hidden');
+        if (adminMappingsView) adminMappingsView.classList.add('hidden');
+        loadAdminUsers();
+    } else {
+        adminSubtabUsers.className = 'btn secondary-btn btn-sm';
+        adminSubtabMappings.className = 'btn primary-btn btn-sm';
+        if (adminUsersView) adminUsersView.classList.add('hidden');
+        if (adminMappingsView) adminMappingsView.classList.remove('hidden');
+        loadAdminMappings();
+    }
+}
+
+async function loadAdminMappings() {
+    try {
+        const res = await fetch(apiUrl('/api/admin/mappings'), { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            showToast(data.error || 'Errore caricamento mappature.', 'error');
+            return;
+        }
+        allAdminChecklistItems = data.checklist_items || [];
+        allAdminMappings = data.mappings || [];
+        allAdminRisks = data.risks || [];
+
+        // Popola filtro categorie
+        if (mappingsCategoryFilter) {
+            const cats = Array.from(new Set(allAdminChecklistItems.map(it => it.category).filter(Boolean))).sort();
+            const curCat = mappingsCategoryFilter.value;
+            mappingsCategoryFilter.innerHTML = '<option value="">Tutte le categorie (' + cats.length + ')</option>';
+            cats.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                if (c === curCat) opt.selected = true;
+                mappingsCategoryFilter.appendChild(opt);
+            });
+        }
+
+        renderAdminMappings();
+    } catch (e) {
+        showToast('Errore di connessione caricamento mappature.', 'error');
+    }
+}
+
+function renderAdminMappings() {
+    if (!mappingsTableBody) return;
+    mappingsTableBody.innerHTML = '';
+
+    const query = mappingsSearchInput ? mappingsSearchInput.value.toLowerCase().trim() : '';
+    const catFilter = mappingsCategoryFilter ? mappingsCategoryFilter.value : '';
+
+    // Mappa per chiave -> lista di criticità
+    const mappingMap = {};
+    allAdminMappings.forEach(m => {
+        const k = m.checklist_key;
+        if (!mappingMap[k]) mappingMap[k] = [];
+        mappingMap[k].push(m);
+    });
+
+    const filtered = allAdminChecklistItems.filter(item => {
+        if (catFilter && item.category !== catFilter) return false;
+        if (!query) return true;
+        const inCat = item.category.toLowerCase().includes(query);
+        const inItem = item.item.toLowerCase().includes(query);
+        const inKey = item.key.toLowerCase().includes(query);
+        const mapped = mappingMap[item.key] || [];
+        const inMapped = mapped.some(m => 
+            (m.luogo && m.luogo.toLowerCase().includes(query)) ||
+            (m.rischio && m.rischio.toLowerCase().includes(query))
+        );
+        return inCat || inItem || inKey || inMapped;
+    });
+
+    if (filtered.length === 0) {
+        mappingsTableBody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: 2rem; color: #888;">Nessuna voce trovata con i filtri attuali.</td></tr>';
+        return;
+    }
+
+    filtered.forEach(it => {
+        const tr = document.createElement('tr');
+        const mappedList = mappingMap[it.key] || [];
+
+        let badgesHtml = '';
+        if (mappedList.length === 0) {
+            badgesHtml = '<span style="color: #666; font-style: italic; font-size: 0.82rem;">Nessuna associazione esplicita (matching automatico)</span>';
+        } else {
+            badgesHtml = mappedList.map(m => {
+                const ord = (m.ordine !== undefined && m.ordine !== 999999) ? `Ord: ${m.ordine}` : '';
+                const title = escHtml(`${m.luogo ? m.luogo + ': ' : ''}${m.rischio}`);
+                return `
+                    <span class="mapping-badge" title="${title}">
+                        <span style="font-weight: 700; color: #38bdf8;">${ord ? ord + ' | ' : ''}</span>
+                        <span>${title}</span>
+                        <i class="fa-solid fa-xmark delete-map-btn" title="Rimuovi associazione" data-key="${escHtml(it.key)}" data-id="${m.dvr_risk_id}"></i>
+                    </span>
+                `;
+            }).join(' ');
+        }
+
+        tr.innerHTML = `
+            <td><strong style="color: #0284c7; font-size: 0.85rem;">${escHtml(it.category)}</strong></td>
+            <td><strong>${escHtml(it.item)}</strong></td>
+            <td><div style="display: flex; flex-wrap: wrap; align-items: center;">${badgesHtml}</div></td>
+            <td style="text-align: center; white-space: nowrap;">
+                <button class="add-map-btn" data-key="${escHtml(it.key)}" data-label="${escHtml(it.category + ' - ' + it.item)}">
+                    <i class="fa-solid fa-plus"></i> Associa
+                </button>
+            </td>
+        `;
+
+        // Delete buttons
+        tr.querySelectorAll('.delete-map-btn').forEach(delBtn => {
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const key = delBtn.dataset.key;
+                const riskId = delBtn.dataset.id;
+                await deleteAdminMapping(key, riskId);
+            });
+        });
+
+        // Add mapping button
+        const addBtn = tr.querySelector('.add-map-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                openMappingModal(it.key, `${it.category} → ${it.item}`);
+            });
+        }
+
+        mappingsTableBody.appendChild(tr);
+    });
+}
+
+async function deleteAdminMapping(checklistKey, dvrRiskId) {
+    if (!confirm('Rimuovere questa associazione?')) return;
+    try {
+        const res = await fetch(apiUrl('/api/admin/mappings'), {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ checklist_key: checklistKey, dvr_risk_id: parseInt(dvrRiskId, 10) })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            showToast(data.error || 'Errore eliminazione.', 'error');
+            return;
+        }
+        showToast('Associazione rimossa.', 'success');
+        // Aggiorna stato locale e ridisegna
+        allAdminMappings = allAdminMappings.filter(m => !(m.checklist_key === checklistKey && String(m.dvr_risk_id) === String(dvrRiskId)));
+        renderAdminMappings();
+    } catch (e) {
+        showToast('Errore di connessione: ' + e.message, 'error');
+    }
+}
+
+function openMappingModal(checklistKey, displayLabel) {
+    currentPickerChecklistKey = checklistKey;
+    selectedRiskIdForMapping = null;
+    if (mappingModalSelectedText) mappingModalSelectedText.textContent = displayLabel;
+    if (mappingRiskSearch) mappingRiskSearch.value = '';
+    renderPickerRisks('');
+    if (mappingModal) mappingModal.classList.remove('hidden');
+}
+
+function closeMappingModal() {
+    if (mappingModal) mappingModal.classList.add('hidden');
+    currentPickerChecklistKey = null;
+    selectedRiskIdForMapping = null;
+}
+
+function renderPickerRisks(filterQuery) {
+    if (!mappingRisksPickerList) return;
+    mappingRisksPickerList.innerHTML = '';
+
+    const filtered = allAdminRisks.filter(r => {
+        if (!filterQuery) return true;
+        const q = filterQuery.toLowerCase();
+        return (r.luogo && r.luogo.toLowerCase().includes(q)) ||
+               (r.rischio && r.rischio.toLowerCase().includes(q));
+    });
+
+    if (filtered.length === 0) {
+        mappingRisksPickerList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #888;">Nessuna criticità trovata.</div>';
+        return;
+    }
+
+    filtered.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'mapping-risk-item' + (selectedRiskIdForMapping === r.id ? ' selected' : '');
+        div.dataset.id = r.id;
+
+        const ord = (r.ordine !== undefined && r.ordine !== 999999) ? `Ord: ${r.ordine}` : '';
+        const imgIcon = r.image ? '<i class="fa-solid fa-camera" title="Ha foto" style="color:#38bdf8; margin-left:6px;"></i>' : '';
+
+        div.innerHTML = `
+            <div>
+                <strong style="color:#ffffff;">${escHtml(r.luogo || 'Generale')}</strong>: 
+                <span style="color:#e2e8f0;">${escHtml(r.rischio)}</span>
+                ${imgIcon}
+            </div>
+            <div style="font-size:0.75rem; color:#94a3b8; white-space:nowrap;">
+                ${ord}
+            </div>
+        `;
+
+        div.addEventListener('click', () => {
+            selectedRiskIdForMapping = r.id;
+            mappingRisksPickerList.querySelectorAll('.mapping-risk-item').forEach(el => el.classList.remove('selected'));
+            div.classList.add('selected');
+        });
+
+        mappingRisksPickerList.appendChild(div);
+    });
+}
+
 
 // ─── Home Options ──────────────────────────────────────────────────────────────
 

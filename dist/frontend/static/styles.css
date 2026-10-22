@@ -1600,3 +1600,74 @@ body {
     color: hsl(var(--text-muted));
 }
 
+/* ─── Admin Checklist Mappings ─────────────────────────────────────────── */
+
+.mapping-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(2, 132, 199, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: #ffffff;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    margin: 3px 4px 3px 0;
+    max-width: 100%;
+}
+
+.mapping-badge .delete-map-btn {
+    color: #f87171;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 2px;
+    transition: transform 0.15s, color 0.15s;
+}
+
+.mapping-badge .delete-map-btn:hover {
+    color: #ef4444;
+    transform: scale(1.25);
+}
+
+.add-map-btn {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+    border: 1px solid #38bdf8 !important;
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.add-map-btn:hover {
+    background: #0369a1 !important;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+    transform: translateY(-1px);
+}
+
+.mapping-risk-item {
+    padding: 9px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.mapping-risk-item:hover {
+    background: rgba(2, 132, 199, 0.25);
+}
+
+.mapping-risk-item.selected {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+}
+

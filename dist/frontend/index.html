@@ -293,36 +293,86 @@
                 </div>
             </section>
 
-            <!-- ADMIN: Gestione utenti -->
+            <!-- ADMIN: Gestione utenti & Associazioni -->
             <section id="admin-section" class="content-card hidden tab-content">
-                <div class="dashboard-header">
-                    <div class="dashboard-title">
-                        <h2><i class="fa-solid fa-user-gear"></i> Gestione Utenti</h2>
-                        <p>Crea e gestisci gli account che possono accedere all'applicazione.</p>
+                <div class="admin-subtabs" style="display: flex; gap: 10px; margin-bottom: 1.5rem; border-bottom: 1px solid hsla(var(--border), 0.6); padding-bottom: 0.85rem;">
+                    <button id="admin-subtab-users" class="btn primary-btn btn-sm">
+                        <i class="fa-solid fa-users"></i> Gestione Utenti
+                    </button>
+                    <button id="admin-subtab-mappings" class="btn secondary-btn btn-sm">
+                        <i class="fa-solid fa-link"></i> Associazioni Checklist - Criticità
+                    </button>
+                </div>
+
+                <!-- SUBVIEW 1: UTENTI -->
+                <div id="admin-users-view">
+                    <div class="dashboard-header">
+                        <div class="dashboard-title">
+                            <h2><i class="fa-solid fa-user-gear"></i> Gestione Utenti</h2>
+                            <p>Crea e gestisci gli account che possono accedere all'applicazione.</p>
+                        </div>
+                    </div>
+                    <div class="db-search-bar">
+                        <div class="search-input-wrapper">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="admin-search-input" placeholder="Cerca utente...">
+                        </div>
+                        <button id="btn-add-user" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Nuovo Utente</button>
+                    </div>
+                    <div class="db-table-wrapper">
+                        <table class="db-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px;">ID</th>
+                                    <th>Utente</th>
+                                    <th>Password</th>
+                                    <th>Ruolo</th>
+                                    <th style="width: 140px; text-align: center;">Azione</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="db-search-bar">
-                    <div class="search-input-wrapper">
-                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="admin-search-input" placeholder="Cerca utente...">
+
+                <!-- SUBVIEW 2: ASSOCIAZIONI CHECKLIST - CRITICITÀ -->
+                <div id="admin-mappings-view" class="hidden">
+                    <div class="dashboard-header">
+                        <div class="dashboard-title">
+                            <h2><i class="fa-solid fa-link"></i> Associazioni Checklist - Criticità DVR</h2>
+                            <p>Associa a ciascuna voce della checklist una o più criticità del database. Quando un tecnico spunterà la voce, compariranno esattamente le criticità associate.</p>
+                        </div>
                     </div>
-                    <button id="btn-add-user" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Nuovo Utente</button>
-                </div>
-                <div class="db-table-wrapper">
-                    <table class="db-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;">ID</th>
-                                <th>Utente</th>
-                                <th>Password</th>
-                                <th>Ruolo</th>
-                                <th style="width: 140px; text-align: center;">Azione</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-users-body">
-                            <!-- Populated dynamically -->
-                        </tbody>
-                    </table>
+                    
+                    <div class="db-search-bar" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.2rem;">
+                        <div class="search-input-wrapper" style="flex: 2; min-width: 260px;">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="mappings-search-input" placeholder="Cerca voce checklist o criticità associata...">
+                        </div>
+                        <div style="flex: 1; min-width: 220px;">
+                            <select id="mappings-category-filter" style="width: 100%; height: 100%; padding: 0.65rem 1rem; border-radius: 12px; background: rgba(0,0,0,0.4); color: #ffffff; border: 1px solid hsla(var(--border), 0.8); font-size: 0.9rem;">
+                                <option value="">Tutte le categorie</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="db-table-wrapper" style="max-height: 600px;">
+                        <table class="db-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 24%;">Categoria</th>
+                                    <th style="width: 30%;">Voce Checklist</th>
+                                    <th style="width: 34%;">Criticità DVR Associate</th>
+                                    <th style="width: 12%; text-align: center;">Azione</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mappings-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
@@ -400,6 +450,38 @@
             <div class="modal-footer">
                 <button id="user-modal-cancel-btn" class="btn secondary-btn">Annulla</button>
                 <button id="user-modal-save-btn" class="btn primary-btn">Salva</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal per associare criticità a voce checklist -->
+    <div id="mapping-modal" class="modal hidden">
+        <div class="modal-content glass-card" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-link"></i> Associa Criticità a Voce Checklist</h3>
+                <button id="mapping-modal-close-btn" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 1.2rem;">
+                    <div style="font-size: 0.78rem; color: #38bdf8; font-weight: 700; text-transform: uppercase;">Voce Checklist Selezionata:</div>
+                    <div id="mapping-modal-selected-text" style="font-size: 1rem; font-weight: 600; color: #ffffff; margin-top: 4px;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mapping-risk-search">Cerca nel Database Criticità:</label>
+                    <input type="text" id="mapping-risk-search" placeholder="Filtra per Luogo o Rischio (es. estintori, ascensore, amianto)...">
+                </div>
+
+                <div class="form-group">
+                    <label>Seleziona una criticità da associare:</label>
+                    <div id="mapping-risks-picker-list" style="max-height: 250px; overflow-y: auto; border: 1px solid hsla(var(--border), 0.7); border-radius: 8px; background: rgba(0,0,0,0.35); padding: 4px;">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="mapping-modal-cancel-btn" class="btn secondary-btn">Annulla</button>
+                <button id="mapping-modal-save-btn" class="btn primary-btn"><i class="fa-solid fa-link"></i> Associa</button>
             </div>
         </div>
     </div>
