@@ -545,7 +545,8 @@ class NeonAdapter(DatabaseAdapter):
         # 1. Recupero da mappature esplicite (priorità assoluta)
         valid_keys = [k for k in checked_keys if k]
         if valid_keys:
-            keys_escaped = ", ".join(f"'{k.replace("'", "''")}'" for k in valid_keys)
+            escaped_keys = [k.replace("'", "''") for k in valid_keys]
+            keys_escaped = ", ".join(f"'{ek}'" for ek in escaped_keys)
             sql = f"""
                 SELECT m.checklist_key, r.id, r.luogo, r.rischio, r.azione, r.entro, r.key, r.ordine, r.image_url
                 FROM checklist_risk_mappings m
