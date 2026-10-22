@@ -257,6 +257,15 @@ def api_admin_delete_user(user_id):
         return jsonify({"error": result.get("error", "Errore eliminazione.")}), 400
     return jsonify({"success": True})
 
+def normalize_key(k):
+    """Normalise a checklist key for fuzzy matching."""
+    if not k:
+        return ""
+    k = str(k).lower().strip()
+    k = re.sub(r'\(.*?\)', '', k)
+    k = re.sub(r'[^a-z0-9\s\n]', ' ', k)
+    return " ".join(k.split())
+
 @app.route('/api/admin/mappings', methods=['GET'])
 @login_required
 def api_admin_get_mappings():
@@ -274,15 +283,116 @@ def api_admin_get_mappings():
                 "luogo": r.get("luogo", ""),
                 "rischio": r.get("rischio", ""),
                 "ordine": r.get("ordine", 999999),
-                "image": bool(r.get("image"))
+                "image": bool(r.get("image")),
+                "key": r.get("key", "")
             }
             for r in dvr_risks
         ]
+
+        # Pre-calcola la normalizzazione dei rischi per performance
+        risks_norm = []
+        for r in dvr_risks:
+            rk = r.get('key') or ''
+            rischio = r.get('rischio') or ''
+            risks_norm.append({
+                "risk": r,
+                "norm_key": normalize_key(rk),
+                "norm_rischio": normalize_key(rischio)
+            })
+
+        # Calcolo corrispondenza automatica per ogni voce di checklist
+        auto_matches = {}
+        for it in checkbox_items:
+            ck = it.get('key', '')
+            if not ck:
+                continue
+            n = normalize_key(ck)
+            if not n:
+                continue
+            for item_norm in risks_norm:
+                r = item_norm["risk"]
+                nr = item_norm["norm_key"]
+                if nr and (nr == n or n in nr or nr in n):
+                    auto_matches[ck] = {
+                        "id": r.get("id"),
+                        "luogo": r.get("luogo", ""),
+                        "rischio": r.get("rischio", ""),
+                        "ordine": r.get("ordine", 999999)
+                    }
+                    break
+                n_rischio = item_norm["norm_rischio"]
+                if n_rischio and (n_rischio == n or n in n_rischio or n_rischio in n):
+                    auto_matches[ck] = {
+                        "id": r.get("id"),
+                        "luogo": r.get("luogo", ""),
+                        "rischio": r.get("rischio", ""),
+                        "ordine": r.get("ordine", 999999)
+                    }
+                    break
+
         return jsonify({
             "success": True,
             "mappings": mappings,
             "checklist_items": checkbox_items,
-            "risks": light_risks
+            "risks": light_risks,
+            "auto_matches": auto_matches
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/mappings/batch_confirm_auto', methods=['POST'])
+@login_required
+def api_admin_batch_confirm_auto():
+    role = getattr(current_user, 'role', 'user')
+    if role not in ('admin', 'supervisor'):
+        return jsonify({"error": "Accesso riservato all'amministratore."}), 403
+    try:
+        checklist_items = DB_ADAPTER.get_checklist_items() if hasattr(DB_ADAPTER, 'get_checklist_items') else []
+        dvr_risks = DB_ADAPTER.get_all_dvr_risks() if hasattr(DB_ADAPTER, 'get_all_dvr_risks') else []
+        checkbox_items = [it for it in checklist_items if it.get('is_checkbox', True)]
+        existing_mappings = DB_ADAPTER.get_mappings() if hasattr(DB_ADAPTER, 'get_mappings') else []
+        mapped_keys = {m['checklist_key'] for m in existing_mappings}
+
+        risks_norm = []
+        for r in dvr_risks:
+            rk = r.get('key') or ''
+            rischio = r.get('rischio') or ''
+            risks_norm.append({
+                "risk": r,
+                "norm_key": normalize_key(rk),
+                "norm_rischio": normalize_key(rischio)
+            })
+
+        count_added = 0
+        for it in checkbox_items:
+            ck = it.get('key', '')
+            if not ck or ck in mapped_keys:
+                continue
+            n = normalize_key(ck)
+            if not n:
+                continue
+            matched_risk = None
+            for item_norm in risks_norm:
+                r = item_norm["risk"]
+                nr = item_norm["norm_key"]
+                if nr and (nr == n or n in nr or nr in n):
+                    matched_risk = r
+                    break
+                n_rischio = item_norm["norm_rischio"]
+                if n_rischio and (n_rischio == n or n in n_rischio or n_rischio in n):
+                    matched_risk = r
+                    break
+
+            if matched_risk and matched_risk.get('id'):
+                res = DB_ADAPTER.add_mapping(ck, matched_risk['id'])
+                if res.get('success'):
+                    count_added += 1
+                    mapped_keys.add(ck)
+
+        return jsonify({
+            "success": True,
+            "count": count_added,
+            "message": f"Confermate e salvate {count_added} associazioni nel database!"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -325,14 +435,6 @@ def api_admin_delete_mapping():
 
 # ─── Database helpers (compatibilità) ─────────────────────────────────────────
 
-def normalize_key(k):
-    """Normalise a checklist key for fuzzy matching."""
-    if not k:
-        return ""
-    k = str(k).lower().strip()
-    k = re.sub(r'\(.*?\)', '', k)
-    k = re.sub(r'[^a-z0-9\s\n]', ' ', k)
-    return " ".join(k.split())
 
 def read_checklist_items():
     """Legge le voci della checklist dal database (via adapter)."""

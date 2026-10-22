@@ -1671,3 +1671,110 @@ body {
     color: #ffffff !important;
 }
 
+/* ─── Mapping Status Filter & Legend Styles ──────────────────────────────── */
+
+.legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.legend-dot.manual-dot { background: #0284c7; box-shadow: 0 0 6px rgba(2, 132, 199, 0.6); }
+.legend-dot.auto-dot { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
+.legend-dot.empty-dot { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
+
+.status-filter-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: hsl(var(--text-muted));
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.status-filter-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+.status-filter-btn.active {
+    background: #0284c7;
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+}
+
+/* Badge manuale */
+.mapping-badge.badge-manual {
+    background: rgba(2, 132, 199, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #ffffff;
+}
+.mapping-badge.badge-manual .badge-type {
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-right: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Badge automatico */
+.mapping-badge.badge-auto {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #fef3c7;
+}
+.mapping-badge.badge-auto .badge-type {
+    background: #d97706;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-right: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Badge vuoto */
+.mapping-badge.badge-empty {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px dashed rgba(239, 68, 68, 0.45);
+    color: #fca5a5;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Pulsante Fissa singola */
+.btn-fissa-single {
+    background: #059669;
+    color: #ffffff;
+    border: 1px solid #34d399;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s, transform 0.15s;
+}
+.btn-fissa-single:hover {
+    background: #10b981;
+    transform: scale(1.05);
+}
+
+

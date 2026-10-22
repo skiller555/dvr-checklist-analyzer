@@ -114,6 +114,7 @@ const adminMappingsView       = document.getElementById('admin-mappings-view');
 const mappingsSearchInput     = document.getElementById('mappings-search-input');
 const mappingsCategoryFilter  = document.getElementById('mappings-category-filter');
 const mappingsTableBody       = document.getElementById('mappings-table-body');
+const btnBatchConfirmAuto      = document.getElementById('btn-batch-confirm-auto');
 const mappingModal            = document.getElementById('mapping-modal');
 const mappingModalCloseBtn    = document.getElementById('mapping-modal-close-btn');
 const mappingModalCancelBtn   = document.getElementById('mapping-modal-cancel-btn');
@@ -550,8 +551,10 @@ function renderAdminUsers(users) {
 let allAdminChecklistItems = [];
 let allAdminMappings = [];
 let allAdminRisks = [];
+let allAdminAutoMatches = {};
 let currentPickerChecklistKey = null;
 let selectedRiskIdForMapping = null;
+let currentMappingStatusFilter = 'all';
 
 function initAdminSubtabs() {
     if (adminSubtabUsers) {
@@ -566,6 +569,43 @@ function initAdminSubtabs() {
     }
     if (mappingsCategoryFilter) {
         mappingsCategoryFilter.addEventListener('change', () => renderAdminMappings());
+    }
+
+    // Filtri rapidi per stato associazione (Tutte / Manuali / Automatiche / Vuote)
+    document.querySelectorAll('#mappings-status-filters .status-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#mappings-status-filters .status-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentMappingStatusFilter = btn.dataset.status;
+            renderAdminMappings();
+        });
+    });
+
+    // Pulsante Fissa tutte le automatiche
+    if (btnBatchConfirmAuto) {
+        btnBatchConfirmAuto.addEventListener('click', async () => {
+            if (!confirm('Vuoi convertire e salvare tutte le associazioni automatiche rilevate come associazioni fisse nel database?')) return;
+            try {
+                btnBatchConfirmAuto.disabled = true;
+                btnBatchConfirmAuto.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvataggio...';
+                const res = await fetch(apiUrl('/api/admin/mappings/batch_confirm_auto'), {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    showToast(data.error || 'Errore salvataggio automatico.', 'error');
+                } else {
+                    showToast(data.message || 'Associazioni confermate con successo!', 'success');
+                    await loadAdminMappings();
+                }
+            } catch (err) {
+                showToast('Errore di rete: ' + err.message, 'error');
+            } finally {
+                btnBatchConfirmAuto.disabled = false;
+                btnBatchConfirmAuto.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Fissa tutte le automatiche';
+            }
+        });
     }
 
     if (mappingModalCloseBtn) {
@@ -649,6 +689,7 @@ async function loadAdminMappings() {
         allAdminChecklistItems = data.checklist_items || [];
         allAdminMappings = data.mappings || [];
         allAdminRisks = data.risks || [];
+        allAdminAutoMatches = data.auto_matches || {};
 
         // Popola filtro categorie
         if (mappingsCategoryFilter) {
@@ -670,6 +711,29 @@ async function loadAdminMappings() {
     }
 }
 
+async function addAdminMappingDirect(checklistKey, dvrRiskId) {
+    try {
+        const res = await fetch(apiUrl('/api/admin/mappings'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                checklist_key: checklistKey,
+                dvr_risk_id: parseInt(dvrRiskId, 10)
+            })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            showToast(data.error || 'Errore durante il fissaggio associazione.', 'error');
+            return;
+        }
+        showToast('Associazione confermata e salvata nel database!', 'success');
+        await loadAdminMappings();
+    } catch (err) {
+        showToast('Errore di connessione: ' + err.message, 'error');
+    }
+}
+
 function renderAdminMappings() {
     if (!mappingsTableBody) return;
     mappingsTableBody.innerHTML = '';
@@ -677,7 +741,7 @@ function renderAdminMappings() {
     const query = mappingsSearchInput ? mappingsSearchInput.value.toLowerCase().trim() : '';
     const catFilter = mappingsCategoryFilter ? mappingsCategoryFilter.value : '';
 
-    // Mappa per chiave -> lista di criticità
+    // Mappa per chiave -> lista di criticità manuali
     const mappingMap = {};
     allAdminMappings.forEach(m => {
         const k = m.checklist_key;
@@ -685,44 +749,109 @@ function renderAdminMappings() {
         mappingMap[k].push(m);
     });
 
+    // Calcola conteggi per i filtri di stato
+    let countAll = 0;
+    let countManual = 0;
+    let countAuto = 0;
+    let countEmpty = 0;
+
+    allAdminChecklistItems.forEach(it => {
+        countAll++;
+        const manual = mappingMap[it.key] || [];
+        if (manual.length > 0) {
+            countManual++;
+        } else if (allAdminAutoMatches[it.key]) {
+            countAuto++;
+        } else {
+            countEmpty++;
+        }
+    });
+
+    const elCountAll = document.getElementById('count-all');
+    const elCountManual = document.getElementById('count-manual');
+    const elCountAuto = document.getElementById('count-auto');
+    const elCountEmpty = document.getElementById('count-empty');
+    if (elCountAll) elCountAll.textContent = countAll;
+    if (elCountManual) elCountManual.textContent = countManual;
+    if (elCountAuto) elCountAuto.textContent = countAuto;
+    if (elCountEmpty) elCountEmpty.textContent = countEmpty;
+
     const filtered = allAdminChecklistItems.filter(item => {
         if (catFilter && item.category !== catFilter) return false;
+
+        const manual = mappingMap[item.key] || [];
+        const auto = allAdminAutoMatches[item.key];
+        const status = manual.length > 0 ? 'manual' : (auto ? 'auto' : 'empty');
+
+        if (currentMappingStatusFilter !== 'all' && status !== currentMappingStatusFilter) {
+            return false;
+        }
+
         if (!query) return true;
         const inCat = item.category.toLowerCase().includes(query);
         const inItem = item.item.toLowerCase().includes(query);
         const inKey = item.key.toLowerCase().includes(query);
-        const mapped = mappingMap[item.key] || [];
-        const inMapped = mapped.some(m => 
+        const inMapped = manual.some(m => 
             (m.luogo && m.luogo.toLowerCase().includes(query)) ||
             (m.rischio && m.rischio.toLowerCase().includes(query))
         );
-        return inCat || inItem || inKey || inMapped;
+        const inAuto = auto && (
+            (auto.luogo && auto.luogo.toLowerCase().includes(query)) ||
+            (auto.rischio && auto.rischio.toLowerCase().includes(query))
+        );
+        return inCat || inItem || inKey || inMapped || inAuto;
     });
 
     if (filtered.length === 0) {
-        mappingsTableBody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: 2rem; color: #888;">Nessuna voce trovata con i filtri attuali.</td></tr>';
+        mappingsTableBody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: 2.5rem; color: #888; font-size: 0.95rem;">Nessuna voce trovata con i filtri attuali.</td></tr>';
         return;
     }
 
     filtered.forEach(it => {
         const tr = document.createElement('tr');
-        const mappedList = mappingMap[it.key] || [];
+        const manualList = mappingMap[it.key] || [];
+        const autoMatch = allAdminAutoMatches[it.key];
 
         let badgesHtml = '';
-        if (mappedList.length === 0) {
-            badgesHtml = '<span style="color: #666; font-style: italic; font-size: 0.82rem;">Nessuna associazione esplicita (matching automatico)</span>';
-        } else {
-            badgesHtml = mappedList.map(m => {
+
+        if (manualList.length > 0) {
+            // Associazioni manuali esplicite
+            badgesHtml = manualList.map(m => {
                 const ord = (m.ordine !== undefined && m.ordine !== 999999) ? `Ord: ${m.ordine}` : '';
                 const title = escHtml(`${m.luogo ? m.luogo + ': ' : ''}${m.rischio}`);
                 return `
-                    <span class="mapping-badge" title="${title}">
+                    <span class="mapping-badge badge-manual" title="${title}">
+                        <span class="badge-type"><i class="fa-solid fa-link"></i> Manuale</span>
                         <span style="font-weight: 700; color: #38bdf8;">${ord ? ord + ' | ' : ''}</span>
                         <span>${title}</span>
                         <i class="fa-solid fa-xmark delete-map-btn" title="Rimuovi associazione" data-key="${escHtml(it.key)}" data-id="${m.dvr_risk_id}"></i>
                     </span>
                 `;
             }).join(' ');
+        } else if (autoMatch) {
+            // Corrispondenza automatica rilevata
+            const ord = (autoMatch.ordine !== undefined && autoMatch.ordine !== 999999) ? `Ord: ${autoMatch.ordine}` : '';
+            const title = escHtml(`${autoMatch.luogo ? autoMatch.luogo + ': ' : ''}${autoMatch.rischio}`);
+            badgesHtml = `
+                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <span class="mapping-badge badge-auto" title="${title}">
+                        <span class="badge-type"><i class="fa-solid fa-wand-magic-sparkles"></i> Automatica</span>
+                        <span style="font-weight: 700; color: #f59e0b;">${ord ? ord + ' | ' : ''}</span>
+                        <span>${title}</span>
+                    </span>
+                    <button type="button" class="btn-fissa-single" data-key="${escHtml(it.key)}" data-id="${autoMatch.id}" title="Fissa questa criticità come associazione permanente nel database">
+                        <i class="fa-solid fa-check"></i> Fissa
+                    </button>
+                </div>
+            `;
+        } else {
+            // Nessuna criticità associata (vuota)
+            badgesHtml = `
+                <span class="mapping-badge badge-empty">
+                    <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i>
+                    <span>Nessun rischio associato (vuoto)</span>
+                </span>
+            `;
         }
 
         tr.innerHTML = `
@@ -736,7 +865,17 @@ function renderAdminMappings() {
             </td>
         `;
 
-        // Delete buttons
+        // Pulsante "Fissa" su match automatico
+        tr.querySelectorAll('.btn-fissa-single').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.key;
+                const riskId = btn.dataset.id;
+                await addAdminMappingDirect(key, riskId);
+            });
+        });
+
+        // Delete buttons per manuali
         tr.querySelectorAll('.delete-map-btn').forEach(delBtn => {
             delBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();

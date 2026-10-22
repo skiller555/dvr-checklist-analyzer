@@ -339,17 +339,38 @@
 
                 <!-- SUBVIEW 2: ASSOCIAZIONI CHECKLIST - CRITICITÀ -->
                 <div id="admin-mappings-view" class="hidden">
-                    <div class="dashboard-header">
+                    <div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
                         <div class="dashboard-title">
                             <h2><i class="fa-solid fa-link"></i> Associazioni Checklist - Criticità DVR</h2>
-                            <p>Associa a ciascuna voce della checklist una o più criticità del database. Quando un tecnico spunterà la voce, compariranno esattamente le criticità associate.</p>
+                            <p>Associa a ciascuna voce della checklist le relative criticità del database. Quando un tecnico seleziona la voce, compariranno esattamente le criticità associate.</p>
                         </div>
+                        <div>
+                            <button id="btn-batch-confirm-auto" class="btn primary-btn btn-sm" style="background: linear-gradient(135deg, #059669, #10b981); border: none;" title="Fissa tutte le corrispondenze automatiche suggerite nel database">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Fissa tutte le automatiche
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Legenda rapida informativa sullo stato di associazione -->
+                    <div class="mapping-legend-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px 14px; margin-bottom: 1.2rem; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; align-items: center;">
+                        <span style="font-weight: 600; color: #cbd5e1;"><i class="fa-solid fa-circle-info" style="color: #38bdf8;"></i> Legenda stato:</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot manual-dot"></span> <strong style="color: #38bdf8;">Manuale</strong> (Fissata nel database, priorità massima)</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot auto-dot"></span> <strong style="color: #f59e0b;">Automatica</strong> (Rilevata dal testo, clicca "Fissa" per confermarla)</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot empty-dot"></span> <strong style="color: #f87171;">Non associata (Vuota)</strong> (Nessun rischio generato, clicca "+ Associa")</span>
+                    </div>
+
+                    <!-- Filtri rapidi per stato associazione -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem;" id="mappings-status-filters">
+                        <button type="button" class="status-filter-btn active" data-status="all">Tutte (<span id="count-all">0</span>)</button>
+                        <button type="button" class="status-filter-btn" data-status="manual">Manuali (<span id="count-manual">0</span>)</button>
+                        <button type="button" class="status-filter-btn" data-status="auto">Automatiche (<span id="count-auto">0</span>)</button>
+                        <button type="button" class="status-filter-btn" data-status="empty">Non Associate / Vuote (<span id="count-empty">0</span>)</button>
                     </div>
                     
                     <div class="db-search-bar" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.2rem;">
                         <div class="search-input-wrapper" style="flex: 2; min-width: 260px;">
                             <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                            <input type="text" id="mappings-search-input" placeholder="Cerca voce checklist o criticità associata...">
+                            <input type="text" id="mappings-search-input" placeholder="Cerca voce checklist o criticità...">
                         </div>
                         <div style="flex: 1; min-width: 220px;">
                             <select id="mappings-category-filter" style="width: 100%; height: 100%; padding: 0.65rem 1rem; border-radius: 12px; background: rgba(0,0,0,0.4); color: #ffffff; border: 1px solid hsla(var(--border), 0.8); font-size: 0.9rem;">
@@ -362,9 +383,9 @@
                         <table class="db-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 24%;">Categoria</th>
-                                    <th style="width: 30%;">Voce Checklist</th>
-                                    <th style="width: 34%;">Criticità DVR Associate</th>
+                                    <th style="width: 18%;">Categoria</th>
+                                    <th style="width: 26%;">Voce Checklist</th>
+                                    <th style="width: 44%;">Criticità DVR Associate</th>
                                     <th style="width: 12%; text-align: center;">Azione</th>
                                 </tr>
                             </thead>
