@@ -52,6 +52,9 @@ class DatabaseAdapter(ABC):
     def update_user_password(self, user_id: int, password_hash: str, plain_password: str = '') -> Dict[str, Any]:
         return {"success": False, "error": "Non implementato"}
 
+    def update_dvr_risk(self, risk_id: Any, risk_data: Dict[str, Any]) -> Dict[str, Any]:
+        return {"success": False, "error": "Non implementato"}
+
 
 class ExcelAdapter(DatabaseAdapter):
     def __init__(self, db_path: str):
@@ -163,6 +166,7 @@ class ExcelAdapter(DatabaseAdapter):
                 img = imgs.get(rn)
                 if luogo or rischio or azione:
                     self._risks_cache.append({
+                        'id': rn,
                         'luogo': str(luogo).strip(), 'rischio': str(rischio).strip(),
                         'azione': str(azione).strip(), 'entro': str(entro).strip(),
                         'key': str(key).strip(), 'ordine': ordine, 'image': img
@@ -405,9 +409,10 @@ class NeonAdapter(DatabaseAdapter):
         ]
 
     def get_all_dvr_risks(self) -> List[Dict[str, Any]]:
-        rows = self._execute_sql("SELECT luogo, rischio, azione, entro, key, ordine, image_url FROM dvr_risks ORDER BY ordine, id;", fetchall=True) or []
+        rows = self._execute_sql("SELECT id, luogo, rischio, azione, entro, key, ordine, image_url FROM dvr_risks ORDER BY ordine, id;", fetchall=True) or []
         return [
             {
+                'id': r['id'],
                 'luogo': r['luogo'] or '',
                 'rischio': r['rischio'] or '',
                 'azione': r['azione'] or '',
@@ -418,6 +423,29 @@ class NeonAdapter(DatabaseAdapter):
             }
             for r in rows
         ]
+
+    def update_dvr_risk(self, risk_id: Any, data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            luogo = (data.get("luogo") or "").replace("'", "''")
+            rischio = (data.get("rischio") or "").replace("'", "''")
+            azione = (data.get("azione") or "").replace("'", "''")
+            entro = (data.get("entro") or "").replace("'", "''")
+            key = (data.get("key") or rischio or luogo).replace("'", "''")
+            raw_ordine = data.get("ordine")
+            try:
+                ordine = int(raw_ordine) if raw_ordine is not None else 999999
+            except (ValueError, TypeError):
+                ordine = 999999
+            image_url = (data.get("image") or "").replace("'", "''")
+            
+            sql = f"""UPDATE dvr_risks 
+                      SET luogo = '{luogo}', rischio = '{rischio}', azione = '{azione}',
+                          entro = '{entro}', key = '{key}', ordine = {ordine}, image_url = '{image_url}'
+                      WHERE id = {int(risk_id)};"""
+            self._execute_sql(sql)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def match_risks(self, checked_keys: List[str]) -> List[Dict[str, Any]]:
         risks = self.get_all_dvr_risks()

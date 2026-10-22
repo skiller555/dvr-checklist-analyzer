@@ -662,6 +662,25 @@ def add_database_risk():
         print("Errore salvataggio riga:", e)
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/database_risk/<int:risk_id>', methods=['PUT'])
+@login_required
+def api_update_database_risk(risk_id):
+    role = getattr(current_user, 'role', 'user')
+    if role not in ('admin', 'supervisor'):
+        return jsonify({"error": "Accesso riservato agli amministratori."}), 403
+    try:
+        data = request.json or {}
+        if not hasattr(DB_ADAPTER, 'update_dvr_risk'):
+            return jsonify({"error": "Operazione non supportata da questo adapter"}), 400
+        result = DB_ADAPTER.update_dvr_risk(risk_id, data)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Errore aggiornamento criticità.")}), 400
+        return jsonify({"success": True, "message": "Criticità aggiornata con successo nel database!"})
+    except Exception as e:
+        print("Errore aggiornamento riga database:", e)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/match_keys', methods=['POST'])
 @login_required
 def match_selected_keys():

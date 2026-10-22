@@ -1024,9 +1024,11 @@ function openModal(idx) {
 
 function closeModal() {
     modal.classList.add('hidden');
+    modal.dataset.mode = '';
     editingIndex = null;
     currentModalImage = null;
     isPermanentDbAdd = false;
+    _dbEditRisk = null;
 }
 
 modalImageFile.addEventListener('change', e => {
@@ -1067,6 +1069,31 @@ modalSaveBtn.addEventListener('click', async () => {
         ordine:  isNaN(ordInput) ? 999999 : ordInput,
         image:   currentModalImage
     };
+
+    // ─── Modifica voce esistente nel database (admin) ───────────────────────
+    if (modal.dataset.mode === 'db-edit' && _dbEditRisk) {
+        try {
+            const res = await fetch(apiUrl(`/api/database_risk/${_dbEditRisk.id}`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(risk)
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(data.message || 'Criticità aggiornata nel database!', 'success');
+                modal.dataset.mode = '';
+                _dbEditRisk = null;
+                await loadDatabaseRisks();
+                closeModal();
+            } else {
+                showToast('Errore: ' + (data.error || 'Aggiornamento fallito.'), 'error');
+            }
+        } catch (err) {
+            showToast('Errore di connessione durante l\'aggiornamento.', 'error');
+        }
+        return;
+    }
 
     if (isPermanentDbAdd) {
         // Salvataggio permanente nel file DATABASE.xlsx
@@ -1122,12 +1149,20 @@ function renderDatabaseTable(risksList) {
         return;
     }
 
+    const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'supervisor');
+
     risksList.forEach(r => {
         const tr = document.createElement('tr');
         const ordVal = (r.ordine !== undefined && r.ordine !== 999999) ? r.ordine : '—';
         const imgCell = r.image 
             ? `<img src="${r.image}" width="110" height="80" style="width:110px; height:80px; max-width:110px; max-height:80px; object-fit:cover; display:block; margin:0 auto; border:1px solid #ccc;" class="db-thumb" alt="Foto">` 
             : `<span style="color:#777777; font-size:0.75rem;">N/D</span>`;
+
+        const editBtn = isAdmin
+            ? `<button class="btn btn-sm edit-db-btn" title="Modifica voce database" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;margin-bottom:4px;">
+                   <i class="fa-solid fa-pen-to-square"></i> Modifica
+               </button><br>`
+            : '';
 
         tr.innerHTML = `
             <td><span class="order-badge" style="background:#004B9B; color:#ffffff !important;">${ordVal}</span></td>
@@ -1137,6 +1172,7 @@ function renderDatabaseTable(risksList) {
             <td style="text-align: center;">${imgCell}</td>
             <td><span class="entro-badge">${escHtml(r.entro)}</span></td>
             <td style="text-align: center; white-space: nowrap;">
+                ${editBtn}
                 <button class="btn primary-btn btn-sm add-db-btn" title="Aggiungi alla tabella lavoro DVR">
                     <i class="fa-solid fa-plus"></i>
                 </button>
@@ -1145,11 +1181,45 @@ function renderDatabaseTable(risksList) {
                 </button>
             </td>`;
         
+        if (isAdmin) {
+            tr.querySelector('.edit-db-btn').addEventListener('click', () => openDbEditModal(r));
+        }
         tr.querySelector('.add-db-btn').addEventListener('click', () => addRiskFromDb(r));
         tr.querySelector('.copy-word-btn').addEventListener('click', () => copyRiskToWord(r));
         dbTableBody.appendChild(tr);
     });
 }
+
+// ─── DB Edit Modal (Admin only) ───────────────────────────────────────────────
+
+let _dbEditRisk = null;
+
+function openDbEditModal(r) {
+    _dbEditRisk = r;
+    isPermanentDbAdd = false;
+    editingIndex = null;
+    currentModalImage = r.image || null;
+
+    modalTitle.textContent = 'Modifica Criticità nel Database';
+    modalLuogo.value   = r.luogo   || '';
+    modalRischio.value = r.rischio || '';
+    modalAzione.value  = r.azione  || '';
+    modalEntro.value   = r.entro   || '';
+    modalOrdine.value  = (r.ordine !== undefined && r.ordine !== 999999) ? r.ordine : 999;
+    modalImageFile.value = '';
+
+    if (r.image) {
+        modalImagePreview.src = r.image;
+        modalImagePreviewBox.classList.remove('hidden');
+    } else {
+        modalImagePreviewBox.classList.add('hidden');
+    }
+
+    // Mark modal as DB-edit mode
+    modal.dataset.mode = 'db-edit';
+    modal.classList.remove('hidden');
+}
+
 
 function copyRiskToWord(r) {
     const imgHtml = r.image 
