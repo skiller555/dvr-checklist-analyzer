@@ -32,6 +32,7 @@ const fileSizeEl             = document.getElementById('file-size');
 const removeFileBtn          = document.getElementById('remove-file-btn');
 const analyzeBtn             = document.getElementById('analyze-btn');
 
+const homeSection            = document.getElementById('home-section');
 const uploadSection          = document.getElementById('upload-section');
 const loadingSection         = document.getElementById('loading-section');
 const interactiveSection     = document.getElementById('interactive-checklist-section');
@@ -134,12 +135,24 @@ function initTabs() {
         tab.addEventListener('click', async () => {
             const targetId = tab.dataset.target;
             const targetSection = document.getElementById(targetId);
+            if (targetId === 'home-section') {
+                showHome();
+                return;
+            }
             if (targetId === 'interactive-checklist-section') {
                 if (!checklistStructure || checklistStructure.length === 0) {
                     await loadChecklistStructure();
                 } else {
                     renderPaperChecklist();
                 }
+            } else if (targetId === 'database-browser-section') {
+                if (!allDbRisks || allDbRisks.length === 0) {
+                    await loadDatabaseRisks();
+                } else {
+                    renderDatabaseTable(allDbRisks);
+                }
+            } else if (targetId === 'results-section') {
+                renderRisks();
             }
             if (targetSection) {
                 switchTab(tab, targetSection);
@@ -535,7 +548,11 @@ document.querySelectorAll('.home-card').forEach(card => {
             }
             switchTab(document.getElementById('tab-interactive'), interactiveSection);
         } else if (action === 'view-database') {
-            await loadDatabaseRisks();
+            if (!allDbRisks || allDbRisks.length === 0) {
+                await loadDatabaseRisks();
+            } else {
+                renderDatabaseTable(allDbRisks);
+            }
             switchTab(document.getElementById('tab-database'), databaseBrowserSection);
         }
     });
